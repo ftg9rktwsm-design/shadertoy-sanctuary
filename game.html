@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>圣殿 · 神之管风琴 — 14 尊石膏神明音阶</title>
+<title>圣殿 · 26 尊神明听写音游 — 雅思词汇 × Creation 分形</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
   canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
@@ -183,7 +183,7 @@
   <button id="btnRandomScore">🎲 随机音游</button>
   <button id="btnPlay" class="primary">▶ 演奏</button>
   <button id="btnStop">■ 停止</button>
-  <span class="tempo">速度 <input id="tempo" type="range" min="140" max="500" step="10" value="280"><span id="tempoVal">280ms</span></span>
+  <span class="tempo">速度 <input id="tempo" type="range" min="140" max="900" step="10" value="280"><span id="tempoVal">280ms</span></span>
   <span class="feedback" id="feedback"></span>
 </div>
 <div id="wordHud">
@@ -763,14 +763,16 @@ const resultsEl = document.getElementById('results');
 function palRGB(x){ const w = 6.28318*x;
   return `rgb(${Math.round(255*(0.5+0.5*Math.cos(w)))},${Math.round(255*(0.5+0.5*Math.cos(w+2.094)))},${Math.round(255*(0.5+0.5*Math.cos(w+4.188)))})`;
 }
-const rg = { active: false, notes: [], pend: 0, score: 0, combo: 0, maxCombo: 0,
+const APPROACH = 1.9;                       // 音符下落时长(秒), 随速度档自动放缓
+function approachFor(step) { return Math.min(3.6, Math.max(1.9, step*4.0)); }
+const rg = { active: false, notes: [], pend: 0, score: 0, combo: 0, maxCombo: 0, approach: APPROACH,
              counts: { p: 0, g: 0, o: 0, m: 0 }, floats: [], laneX: [], laneY: [], laneHalf: 46 };
-const APPROACH = 1.9;                       // 音符下落时长(秒)
 const WIN_P = 0.06, WIN_G = 0.13, WIN_O = 0.22;
 
 function startRhythm(seq, step, t0) {
   rg.active = true; rg.pend = 0; rg.score = 0; rg.combo = 0; rg.maxCombo = 0;
   rg.counts = { p: 0, g: 0, o: 0, m: 0 }; rg.floats.length = 0;
+  rg.approach = approachFor(step);              // 速度越慢, 下落越缓
   rg.notes = [];
   seq.forEach((idx, k) => { if (idx >= 0) rg.notes.push({ i: idx, t: t0 + k*step, judged: false }); });
   resultsEl.classList.remove('show');
@@ -1105,10 +1107,10 @@ function drawFx(at, dt) {
     // 判定线 + 下落音符
     for (let k = rg.pend; k < rg.notes.length; k++) {
       const n = rg.notes[k];
-      if (n.t > at + APPROACH) break;
+      if (n.t > at + (rg.approach || APPROACH)) break;
       if (n.judged || rg.laneX[n.i] == null) continue;
       const lx = rg.laneX[n.i], jy = rg.laneY[n.i];
-      const p = Math.max(0, Math.min(1, 1 - (n.t - at)/APPROACH));
+      const p = Math.max(0, Math.min(1, 1 - (n.t - at)/(rg.approach || APPROACH)));
       const y = 50 + (jy - 50)*p;
       const near = Math.max(0, 1 - Math.abs(n.t - at)/0.3);
       fctx.strokeStyle = `rgba(255,217,122,${0.12 + 0.25*near})`;
@@ -1136,6 +1138,7 @@ function drawFx(at, dt) {
       const n = rg.notes[k];
       if (n.judged) continue;
       const rem = Math.max(0, n.t - at);
+      if (rem > (rg.approach || APPROACH)) break;
       const isCur = shownN === 0;
       const size = isCur ? 118 : (shownN === 1 ? 52 : 36);
       const gx = W/2 + (shownN === 0 ? 0 : (shownN === 1 ? 130 : 205));
@@ -1425,7 +1428,7 @@ document.getElementById('btnRandomScore').addEventListener('click', () => {
   endFinale();
   const s = AUTO_SCORES[Math.floor(Math.random()*AUTO_SCORES.length)];
   seqInput.value = s.text;
-  tempoEl.value = 300; tempoVal.textContent = '300ms';
+  tempoEl.value = 420; tempoVal.textContent = '420ms';
   feedback.textContent = `🎵 乐谱「${s.name}」`;
   setTimeout(() => feedback.textContent = '', 2600);
   playSeq();
