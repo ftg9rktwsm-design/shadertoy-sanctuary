@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圣殿 · 神之管风琴 — 14 尊石膏神明音阶</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  canvas.hover { cursor: pointer; }
+
+  #hud {
+    position: fixed; top: 18px; left: 22px; pointer-events: none; user-select: none;
+    color: #e8dcc0; text-shadow: 0 2px 10px rgba(0,0,0,.8);
+    font-family: "Songti SC", "STSong", "SimSun", serif;
+  }
+  #hud .title { font-size: 26px; letter-spacing: 8px; }
+  #hud .title .en { font-size: 12px; letter-spacing: 4px; color: #b9a06a; font-family: Georgia, serif; }
+  #hud .sub { font-size: 13px; margin-top: 6px; color: rgba(232,220,192,.65); letter-spacing: 2px; }
+  #hud .keys { margin-top: 10px; font: 12px/1.8 Menlo, monospace; color: rgba(232,220,192,.55); }
+  #hud .keys b { color: #ffd97a; font-weight: 600; letter-spacing: 2px; }
+  #hud .perf { font: 10px Menlo, monospace; color: rgba(232,220,192,.35); margin-top: 6px; }
+
+  #topright { position: fixed; top: 18px; right: 18px; text-align: right; }
+  #topright a {
+    display: block; margin-left: auto; margin-bottom: 8px;
+    font: 12px "PingFang SC", sans-serif; letter-spacing: 2px;
+    color: #d9c38a; background: rgba(20,16,8,.45);
+    border: 1px solid rgba(217,195,138,.4); border-radius: 6px;
+    padding: 7px 14px; cursor: pointer; text-decoration: none; backdrop-filter: blur(4px);
+  }
+  #topright a:hover { background: rgba(60,48,20,.55); }
+
+  /* ---------- 演奏台 ---------- */
+  #console {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(10,12,16,.62); backdrop-filter: blur(8px);
+    border: 1px solid rgba(217,195,138,.35); border-radius: 10px;
+    padding: 9px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.45);
+  }
+  #seqInput {
+    width: 340px; font: 14px Menlo, monospace; letter-spacing: 1px;
+    color: #ffe9b0; background: rgba(0,0,0,.45);
+    border: 1px solid rgba(217,195,138,.4); border-radius: 6px; padding: 7px 10px; outline: none;
+  }
+  #seqInput:focus { border-color: rgba(255,217,122,.8); }
+  #console button {
+    font: 12px "PingFang SC", sans-serif; letter-spacing: 2px; white-space: nowrap;
+    color: #dde; background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 6px;
+    padding: 7px 13px; cursor: pointer;
+  }
+  #console button:hover { background: rgba(255,255,255,.2); }
+  #console button.primary { background: rgba(108,192,255,.28); border-color: rgba(108,192,255,.55); }
+  #console button.primary:hover { background: rgba(108,192,255,.45); }
+  #console .tempo { display: flex; align-items: center; gap: 5px; color: rgba(232,220,192,.6); font: 11px "PingFang SC", sans-serif; }
+  #console .tempo input { width: 62px; accent-color: #6cf; }
+  #console .feedback { font: 11px Menlo, monospace; color: #8f8; min-width: 60px; text-align: right; }
+
+  /* ---------- 音游判定层与结算 ---------- */
+  #fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+  #rhud {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none; user-select: none; display: none;
+    color: #ffe9b0; text-shadow: 0 2px 8px rgba(0,0,0,.9);
+    font-family: "Songti SC", "STSong", serif;
+  }
+  #rhud .combo { font-size: 24px; letter-spacing: 4px; min-height: 30px;
+                 text-shadow: 0 0 14px rgba(255,214,130,.9); }
+  #rhud .score { font-size: 14px; letter-spacing: 3px; color: rgba(255,236,190,.85); }
+  #results {
+    position: fixed; inset: 0; display: none; opacity: 0;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: radial-gradient(ellipse at center, rgba(22,15,4,.5), rgba(0,0,0,.78));
+    pointer-events: none; text-align: center;
+    font-family: "Songti SC", "STSong", "SimSun", serif; color: #ffe9b0;
+    transition: opacity 1.4s ease;
+  }
+  #results.show { display: flex; opacity: 1; }
+  #results .rank {
+    font-size: 120px; line-height: 1; letter-spacing: 12px; text-indent: 12px;
+    text-shadow: 0 0 26px rgba(255,214,130,.95), 0 0 90px rgba(255,190,90,.55);
+    animation: rankin 1.6s ease;
+  }
+  #results .eval { font-size: 24px; letter-spacing: 14px; text-indent: 14px; margin-top: 12px;
+                   text-shadow: 0 0 16px rgba(255,214,130,.8); }
+  #results .score-line { font-size: 32px; letter-spacing: 6px; margin-top: 16px; }
+  #results .detail { margin-top: 14px; font: 15px/2 "PingFang SC", sans-serif;
+                     letter-spacing: 2px; color: rgba(255,236,190,.8); }
+  @keyframes rankin {
+    from { transform: scale(1.7); opacity: 0; filter: blur(8px); }
+    to   { transform: scale(1);   opacity: 1; filter: blur(0); }
+  }
+
+  /* ---------- 单词试炼 ---------- */
+  #wordHud {
+    position: fixed; top: 88px; left: 50%; transform: translateX(-50%);
+    display: none; text-align: center; color: #ffe9b0;
+    text-shadow: 0 2px 8px rgba(0,0,0,.85);
+    font-family: "Songti SC", "STSong", serif;
+    pointer-events: none; user-select: none;
+  }
+  #wordHud .widx { color: #b9a06a; font-size: 14px; letter-spacing: 2px; }
+  #wordHud button {
+    pointer-events: auto; font: 12px "PingFang SC", sans-serif; color: #d9c38a;
+    background: rgba(20,16,8,.5); border: 1px solid rgba(217,195,138,.4);
+    border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-left: 8px;
+  }
+  #wordHud .wslots { font-size: 30px; letter-spacing: 10px; margin-top: 8px; color: #fff;
+                     text-shadow: 0 0 16px rgba(255,217,122,.6); min-height: 40px; }
+  #wordHud .wdots { margin-top: 6px; font-size: 12px; letter-spacing: 6px; color: #6b5f45; }
+  #wordHud .wdots .on { color: #ffd97a; text-shadow: 0 0 10px rgba(255,217,122,.8); }
+  #wordCard {
+    position: fixed; bottom: 112px; left: 50%; transform: translateX(-50%);
+    display: none; text-align: center; padding: 14px 28px; border-radius: 10px;
+    backdrop-filter: blur(8px); pointer-events: none; max-width: 84vw;
+    font-family: "Songti SC", "STSong", serif;
+  }
+  #wordCard.good { background: rgba(20,40,16,.62); border: 1px solid rgba(255,217,122,.5);
+                   color: #ffe9b0; box-shadow: 0 0 24px rgba(255,214,130,.35);
+                   font-size: 20px; letter-spacing: 2px; }
+  #wordCard.bad  { background: rgba(48,16,12,.62); border: 1px solid rgba(255,150,120,.5);
+                   color: #ffd9c9; font-size: 18px; letter-spacing: 1px; }
+  #wordCard.review { background: rgba(16,18,28,.62); border: 1px solid rgba(217,195,138,.45);
+                     color: #ffeecb; font-size: 24px; letter-spacing: 3px; }
+  #wordCard .cn { font: 15px "PingFang SC", sans-serif; color: rgba(255,236,190,.85);
+                  letter-spacing: 1px; display: block; margin-top: 6px; }
+  #wordCard b { letter-spacing: 4px; }
+
+  #hint {
+    position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%);
+    font: 12px/1.6 "PingFang SC", sans-serif; letter-spacing: 1px;
+    color: rgba(232,220,192,.5); user-select: none; pointer-events: none;
+    text-shadow: 0 1px 6px rgba(0,0,0,.9); white-space: nowrap;
+  }
+  #credit {
+    position: fixed; bottom: 16px; left: 16px;
+    font: 10px Menlo, monospace; color: rgba(232,220,192,.28);
+    user-select: none; pointer-events: none;
+  }
+  #err {
+    position: fixed; inset: 0; display: none; overflow: auto;
+    padding: 24px; background: #200; color: #f88;
+    font: 13px/1.5 Menlo, Consolas, monospace; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="glcanvas"></canvas>
+<div id="hud">
+  <div class="title">圣 殿 <span class="en">ORGAN OF GODS</span></div>
+  <div class="sub">二十六尊石膏神明 · 每尊一个字母 · 听写雅思词汇 谱写你的圣歌</div>
+  <div class="keys">
+    键盘 <b>A – Z</b> = 26 尊神明 · 半音阶 C4 – D6 · 一键一音一字母
+  </div>
+  <div class="perf" id="perf"></div>
+</div>
+<div id="hint">📖 单词试炼: 听写 → 按字母键拼写 → 回车提交 · 拖拽 环视 · 滚轮 远近 · 自由弹奏 A–Z</div>
+<div id="credit">fractal sky based on "Creation" · Danilo Guanabara (Silexars)</div>
+<div id="topright"><a href="index.html">← 参数实验室</a></div>
+
+<div id="console">
+  <input id="seqInput" placeholder="乐谱: a s f q w u 或 c4 e4 g4 c5 (空格分隔, - 为休止)" spellcheck="false">
+  <button id="btnWord">📖 单词试炼</button>
+  <button id="btnPlay" class="primary">▶ 演奏</button>
+  <button id="btnStop">■ 停止</button>
+  <span class="tempo">速度 <input id="tempo" type="range" min="140" max="500" step="10" value="280"><span id="tempoVal">280ms</span></span>
+  <span class="feedback" id="feedback"></span>
+</div>
+<div id="wordHud">
+  <div class="wtitle"></div>
+  <div class="wslots"></div>
+  <div class="wdots"></div>
+</div>
+<div id="wordCard"></div>
+<canvas id="fx"></canvas>
+<div id="rhud"><div class="combo"></div><div class="score"></div></div>
+<div id="results">
+  <div class="rank"></div>
+  <div class="eval"></div>
+  <div class="score-line"></div>
+  <div class="detail"></div>
+</div>
+<pre id="err"></pre>
+
+<script>
+'use strict';
+const errBox = document.getElementById('err');
+function showError(m){ errBox.textContent = m; errBox.style.display = 'block'; }
+
+/* ================= 着色器 ================= */
+const VS = `attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const FS = `precision highp float;
+uniform vec3  iResolution;
+uniform float iTime;
+uniform float uPulse[26];   // 每尊神像的音符脉冲 0..1
+uniform float uAwaken[26];  // 每尊神像的苏醒进度 0..1 (终章后常驻)
+uniform float uSacred;      // 神圣终章整体强度 0..1
+uniform float uBeat;        // 单音瞬间脉动
+uniform float uEnergy;      // 旋律能量(平滑)
+uniform float uPitchN;      // 最近音符的音高 0..1
+uniform float uSeqPhase;    // 旋律推动的分形相位
+uniform vec3  uLightPos;
+uniform float uYaw, uPitch, uDist;
+uniform float uSkyPhase, uSkyWave, uSkyAmp, uSkyGlow, uSkyHue, uSkyRainbow, uSkySpeed;
+uniform float uSkyZoom, uSkyShape, uSkyShapeSize, uSkyRot, uSkyCell;   // 实验室形状/缩放/密度联动
+
+#define t iTime
+const float FOC = 1.4;
+const float R_ARC = 7.4;
+const float TH_STEP = 0.105;
+
+// ---------- 基础 SDF ----------
+float smin(float a, float b, float k){
+	float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+	return mix(b, a, h) - k*h*(1.0-h);
+}
+float sdEllipsoid(vec3 p, vec3 r){
+	float k0 = length(p/r);
+	float k1 = length(p/(r*r));
+	return k0*(k0-1.0)/max(k1, 1e-6);
+}
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+	vec3 pa = p-a, ba = b-a;
+	float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+	return length(pa - ba*h) - r;
+}
+float sdCylY(vec3 p, float y0, float y1, float r){
+	float d = length(p.xz) - r;
+	d = max(d, y0 - p.y);
+	return max(d, p.y - y1);
+}
+vec3 palette(float x){
+	return 0.5 + 0.5*cos(6.28318*x + vec3(0.0, 2.094, 4.188));
+}
+float hash21(vec2 p){
+	return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453);
+}
+float vnoise(vec2 p){                       // 平滑值噪声(有机的草地色斑)
+	vec2 i = floor(p), f2 = fract(p);
+	f2 = f2*f2*(3.0 - 2.0*f2);
+	return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f2.x),
+	           mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f2.x), f2.y);
+}
+float easeBack(float x){
+	float c1 = 1.70158, c3 = c1 + 1.0, u = x - 1.0;
+	return 1.0 + c3*u*u*u + c1*u*u;
+}
+vec3 statCenter(float i){
+	float a = (i - 6.5)*TH_STEP;
+	return vec3(sin(a)*R_ARC, 0.0, -cos(a)*R_ARC);
+}
+
+// ---------- 神像 ----------
+float sdPedestal(vec3 q){
+	float d = sdCylY(q, 0.02, 0.62, 0.34);
+	d = min(d, length(vec2(length(q.xz) - 0.40, q.y - 0.62)) - 0.04);
+	d = min(d, length(vec2(length(q.xz) - 0.40, q.y - 0.05)) - 0.04);
+	return d;
+}
+float sdBuddha(vec3 q){
+	float d = sdEllipsoid(q - vec3(0., 0.07, 0.), vec3(0.46, 0.10, 0.46));
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.23, 0.), vec3(0.37, 0.13, 0.33)), 0.05);
+	// 袈裟衣褶(水平波浪刻痕)
+	float tor = sdEllipsoid(q - vec3(0., 0.44, 0.), vec3(0.27, 0.20, 0.23));
+	tor += 0.006*sin(q.y*46.0);
+	d = smin(d, tor, 0.05);
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.68, 0.), vec3(0.21, 0.24, 0.19)), 0.06);
+	// 双臂 + 合十的手
+	d = smin(d, sdCapsule(q, vec3( 0.18, 0.74, 0.04), vec3( 0.05, 0.36, 0.21), 0.052), 0.05);
+	d = smin(d, sdCapsule(q, vec3(-0.18, 0.74, 0.04), vec3(-0.05, 0.36, 0.21), 0.052), 0.05);
+	d = smin(d, length(q - vec3(0., 0.34, 0.22)) - 0.05, 0.04);
+	// 头 + 双耳垂 + 肉髻
+	d = smin(d, length(q - vec3(0., 0.98, 0.)) - 0.15, 0.04);
+	d = smin(d, sdEllipsoid(q - vec3( 0.145, 0.94, 0.), vec3(0.03, 0.075, 0.05)), 0.03);
+	d = smin(d, sdEllipsoid(q - vec3(-0.145, 0.94, 0.), vec3(0.03, 0.075, 0.05)), 0.03);
+	d = smin(d, length(q - vec3(0., 1.12, 0.)) - 0.055, 0.05);
+	// 面部: 鼻 / 眼窝(凹陷) / 白毫
+	d = smin(d, length(q - vec3(0., 0.98, 0.135)) - 0.022, 0.02);
+	d = max(d, -(length(q - vec3( 0.055, 1.005, 0.125)) - 0.020));
+	d = max(d, -(length(q - vec3(-0.055, 1.005, 0.125)) - 0.020));
+	d = smin(d, length(q - vec3(0., 1.06, 0.12)) - 0.012, 0.015);
+	return d;
+}
+float sdPray(vec3 q){
+	// 长袍褶皱
+	float rob = sdEllipsoid(q - vec3(0., 0.50, 0.), vec3(0.27, 0.50, 0.22));
+	rob += 0.005*sin(q.y*40.0);
+	float d = smin(rob, sdEllipsoid(q - vec3(0., 0.06, 0.), vec3(0.34, 0.10, 0.30)), 0.06);
+	// 腰带
+	d = min(d, length(vec2(length(q.xy - vec2(0., 0.32)) - 0.24, (q.z)*1.4)) - 0.022);
+	// 合十双手
+	d = smin(d, sdCapsule(q, vec3( 0.15, 0.84, 0.10), vec3(0., 0.71, 0.19), 0.046), 0.05);
+	d = smin(d, sdCapsule(q, vec3(-0.15, 0.84, 0.10), vec3(0., 0.71, 0.19), 0.046), 0.05);
+	d = smin(d, length(q - vec3(0., 0.70, 0.19)) - 0.052, 0.03);
+	// 头 + 兜帽檐 + 鼻 + 眼窝
+	d = smin(d, length(q - vec3(0., 1.00, 0.07)) - 0.12, 0.04);
+	d = min(d, length(vec2(length(q.xy - vec2(0., 1.04)) - 0.15, q.z + 0.06)) - 0.028);
+	d = smin(d, length(q - vec3(0., 0.985, 0.155)) - 0.018, 0.02);
+	d = max(d, -(length(q - vec3( 0.05, 1.025, 0.13)) - 0.017));
+	d = max(d, -(length(q - vec3(-0.05, 1.025, 0.13)) - 0.017));
+	d = smin(d, sdEllipsoid(q - vec3(0., 1.01, -0.07), vec3(0.16, 0.18, 0.115)), 0.04);
+	return d;
+}
+float sdGoddess(vec3 q){
+	float d = sdCylY(q, 0.02, 0.12, 0.20);
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.10, 0.), vec3(0.28, 0.07, 0.19)), 0.05);
+	// 长裙褶皱
+	float bod = sdEllipsoid(q - vec3(0., 0.38, 0.), vec3(0.22, 0.25, 0.145));
+	bod += 0.005*sin(q.y*42.0);
+	d = smin(d, bod, 0.06);
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.64, 0.), vec3(0.26, 0.075, 0.12)), 0.05);
+	// 项链
+	d = min(d, length(vec2(length(q.xy - vec2(0., 0.70)) - 0.10, (q.z - 0.08)*1.6)) - 0.014);
+	// 颈
+	d = smin(d, sdCylY(q, 0.66, 0.80, 0.05), 0.03);
+	// 头 + 脑后发髻 + 顶髻 + 鼻 + 眼窝
+	d = smin(d, length(q - vec3(0., 0.94, 0.01)) - 0.14, 0.04);
+	d = smin(d, length(q - vec3(0., 0.91, -0.08)) - 0.145, 0.05);
+	d = smin(d, sdEllipsoid(q - vec3(0., 1.02, 0.), vec3(0.055, 0.05, 0.055)), 0.04);
+	d = smin(d, length(q - vec3(0., 0.925, 0.125)) - 0.016, 0.02);
+	d = max(d, -(length(q - vec3( 0.048, 0.965, 0.105)) - 0.015));
+	d = max(d, -(length(q - vec3(-0.048, 0.965, 0.105)) - 0.015));
+	// Polos 圣冠 + 冠顶宝珠
+	d = smin(d, sdCylY(q, 1.05, 1.16, 0.085), 0.04);
+	d = min(d, length(vec2(length(q.xz) - 0.10, q.y - 1.05)) - 0.02);
+	d = smin(d, length(q - vec3(0., 1.185, 0.)) - 0.028, 0.03);
+	return d;
+}
+
+// ---------- 场景: id 0=地面 1=神像 2=光环 ----------
+vec2 opU(vec2 a, float d, float id){ return d < a.x ? vec2(d, id) : a; }
+
+vec2 map(vec3 p){
+	vec2 res = vec2(p.y, 0.0);
+	for (int i = 0; i < 26; i++) {
+		float fi = float(i);
+		vec3 q = p - statCenter(fi);
+		float bs = length(q) - 1.7;                 // 包围球加速
+		if (bs > 0.5) { res = opU(res, bs, 1.0); continue; }
+		float sc = 0.94 + 0.05*mod(fi, 3.0);        // 每尊微差缩放
+		float d = sdPedestal(q/sc)*sc;
+		vec3 f = q/sc - vec3(0., 0.66, 0.);         // 像身基点(比例略缩小)
+		int ty = i - (i/3)*3;
+		if (ty == 0)      d = min(d, sdBuddha(f));
+		else if (ty == 1) d = min(d, sdPray(f));
+		else              d = min(d, sdGoddess(f));
+		res = opU(res, d*sc, 1.0);
+		// 音符光环: 发声时闪现; 终章苏醒后常驻 (主环 + 外圈细环)
+		float glow = max(uPulse[i], uAwaken[i]);
+		if (glow > 0.02) {
+			vec3 h = f - vec3(0., 1.02, -0.12);
+			float R = 0.28*easeBack(clamp(glow*1.3, 0.0, 1.0)) + 0.008*sin(t*5.0 + fi);
+			float hd = length(vec2(length(h.xy) - R, h.z)) - 0.016;
+			float hd2 = length(vec2(abs(length(h.xy) - R*1.25), h.z)) - 0.005;
+			res = opU(res, min(hd, hd2), 2.0);
+		}
+	}
+	return res;
+}
+
+vec3 calcNormal(vec3 p){
+	const vec2 e = vec2(0.0012, -0.0012);
+	return normalize(e.xyy*map(p + e.xyy).x + e.yyx*map(p + e.yyx).x +
+	                 e.yxy*map(p + e.yxy).x + e.xxx*map(p + e.xxx).x);
+}
+float softShadow(vec3 ro, vec3 rd){
+	float res = 1.0, dd = 0.06;
+	for (int i = 0; i < 10; i++) {
+		float h = map(ro + rd*dd).x;
+		res = min(res, 10.0*h/dd);
+		dd += clamp(h, 0.03, 0.6);
+		if (res < 0.005 || dd > 9.0) break;
+	}
+	return clamp(res, 0.0, 1.0);
+}
+float calcAO(vec3 p, vec3 n){
+	float occ = 0.0, sca = 1.0;
+	for (int i = 0; i < 4; i++) {
+		float h = 0.02 + 0.09*float(i);
+		occ += (h - map(p + n*h).x)*sca;
+		sca *= 0.75;
+	}
+	return clamp(1.0 - 2.0*occ, 0.0, 1.0);
+}
+
+// ---------- 天空: Creation 分形神域, 随旋律律动 ----------
+vec3 skyCol(vec3 rd){
+	vec2 uv = rd.xz/max(rd.y + 0.9, 0.12);
+	vec2 pp = (uv*0.75 - 0.5)*(1.0 - 0.05*uBeat);      // 音符脉冲: 轻微呼吸缩放
+	pp *= 2.0/uSkyCell;                                // 晶格间距 → 图案密度
+	pp /= uSkyZoom;                                    // 画面缩放
+	float act = 0.05 + 0.45*uEnergy + 0.40*uSacred;
+	vec3 col = vec3(0.012, 0.011, 0.016);
+	float z = t*0.3*uSkySpeed + uSeqPhase;             // 旋律推动分形演化
+	for (int i = 0; i < 3; i++) {
+		vec2 w = pp - 0.5;
+		z += uSkyPhase;
+		float ll = max(length(w), 1e-3);
+		vec2 q2 = pp + w/ll*(sin(z) + 1.0)*uSkyAmp*abs(sin(ll*uSkyWave - z - z));
+		vec2 cell = mod(q2, 1.0) - 0.5;
+		float dcell = length(cell);
+		// 实验室形状联动: 光斑变成对应正多边形霓虹描边
+		if (uSkyShape >= 2.5 && uSkyShapeSize > 0.01) {
+			float a2 = atan(cell.y, cell.x) + uSkyRot;
+			float sec = 6.28318530718/uSkyShape;
+			float pr = cos(3.14159265359/uSkyShape)/cos(mod(a2, sec) - 0.5*sec);
+			dcell = abs(length(cell) - pr*uSkyShapeSize*0.38);
+		}
+		col[i] += act*0.03*uSkyGlow*(1.0 + 1.4*uBeat)/max(1e-3, dcell);
+	}
+	float ph = uPitchN*0.4 + t*0.02*uSkySpeed + uSkyHue/360.0
+	         + uSkyRainbow*(length(pp)*0.6 + t*0.05) + uSeqPhase*0.15;
+	col = col*mix(vec3(1.0), palette(ph), 0.75)*2.2;
+	col *= smoothstep(-0.05, 0.3, rd.y);
+	// 终章: 金色圣光洒满天空
+	col += vec3(1.0, 0.86, 0.55)*uSacred*(0.10 + 0.06*sin(t*1.7))*smoothstep(-0.05, 0.3, rd.y);
+	// 音符涟漪: 从中心扩散的光环
+	float ring = exp(-abs(length(pp)*2.2 - fract(t*0.9)*2.4)*7.0);
+	col += palette(uPitchN*0.4 + 0.1)*uBeat*ring*0.4*smoothstep(-0.05, 0.3, rd.y);
+	return col;
+}
+
+void main(){
+	vec2 p = (gl_FragCoord.xy - 0.5*iResolution.xy)/iResolution.y;
+	vec3 ta = vec3(0., 0.95, -1.2);
+	vec3 ro = ta + uDist*vec3(sin(uYaw)*cos(uPitch), sin(uPitch), cos(uYaw)*cos(uPitch));
+	vec3 fw = normalize(ta - ro);
+	vec3 rt = normalize(cross(fw, vec3(0., 1., 0.)));
+	vec3 up = cross(rt, fw);
+	vec3 rd = normalize(fw*FOC + rt*p.x + up*p.y);
+
+	vec3 sky = skyCol(rd);
+	vec3 col = sky;
+
+	float dist = 0.02, id = -1.0;
+	vec3 pos = ro;
+	for (int i = 0; i < 64; i++) {
+		pos = ro + rd*dist;
+		vec2 h = map(pos);
+		if (h.x < 0.0012*dist + 0.0006) { id = h.y; break; }
+		dist += h.x*0.9;
+		if (dist > 40.0) { id = -1.0; break; }
+	}
+
+	if (id > -0.5) {
+		vec3 n = calcNormal(pos);
+		float ao = calcAO(pos, n);
+		vec3 key = normalize(vec3(0.55, 0.85, 0.45));
+		vec3 Lm = uLightPos - pos;
+		float dl = length(Lm); Lm /= dl;
+		float mLight = clamp(dot(n, Lm), 0.0, 1.0);
+
+		if (id < 0.5) {
+			float rr = length(pos.xz);
+			// 草地: 平滑噪声的月下草坪
+			float n1 = vnoise(pos.xz*1.3);
+			float n2 = vnoise(pos.xz*7.0)*0.6 + vnoise(pos.xz*22.0)*0.4;
+			vec3 alb = mix(vec3(0.030, 0.070, 0.022), vec3(0.060, 0.115, 0.034), n1);
+			alb = mix(alb, vec3(0.085, 0.14, 0.045), n2*0.45);
+			// 每尊神像脚下的圆形石台
+			float dc = 1e9;
+			for (int k = 0; k < 14; k++) dc = min(dc, length(pos.xz - statCenter(float(k)).xz));
+			float stone = 1.0 - smoothstep(0.70, 0.80, dc);
+			alb = mix(alb, vec3(0.30, 0.29, 0.27)*(0.85 + 0.25*n2), stone);
+			float sh = softShadow(pos + n*0.02, key);
+			vec3 lin = vec3(1.0, 0.95, 0.88)*clamp(dot(n, key), 0.0, 1.0)*sh*1.1;
+			lin += vec3(0.22, 0.27, 0.38)*(0.5 + 0.5*n.y)*0.6;
+			lin += vec3(1.0, 0.92, 0.78)*mLight*(1.6/(1.0 + dl*dl*0.35));
+			col = alb*lin*ao;
+			// 发声神像脚下的音之光池; 苏醒后常驻柔光
+			for (int k = 0; k < 26; k++) {
+				float g = max(uPulse[k], uAwaken[k]*0.55);
+				if (g > 0.02) {
+					vec2 dv = pos.xz - statCenter(float(k)).xz;
+					col += palette(float(k)/13.0*0.8)*g*0.6*exp(-dot(dv, dv)*2.0)*smoothstep(0.0, 0.2, pos.y);
+				}
+			}
+			col += vec3(1.0, 0.85, 0.5)*uSacred*0.20*exp(-rr*rr*0.08);
+		} else if (id < 1.5) {
+			// 白色石膏神明
+			float sh = softShadow(pos + n*0.02, key);
+			float dif = clamp(dot(n, key)*0.6 + 0.4, 0.0, 1.0);
+			vec3 lin = vec3(1.08, 1.0, 0.9)*dif*sh;
+			lin += vec3(0.28, 0.33, 0.45)*(0.5 + 0.5*n.y);
+			lin += vec3(0.18, 0.13, 0.09)*clamp(-n.y*0.5 + 0.5, 0.0, 1.0)*0.5;
+			lin += vec3(1.0, 0.92, 0.78)*mLight*(2.2/(1.0 + dl*dl*0.30));
+			// 该神像发声/苏醒时的彩色轮廓
+			float a = atan(pos.x, -pos.z);
+			float fidx = clamp(floor(a/TH_STEP + 12.5 + 0.5), 0.0, 25.0);
+			float pu = 0.0, aw = 0.0;
+			for (int k = 0; k < 26; k++) {
+				if (k == int(fidx)) { pu = uPulse[k]; aw = uAwaken[k]; }
+			}
+			float rim = pow(clamp(1.0 + dot(rd, n), 0.0, 1.0), 3.0);
+			lin += palette(fidx/25.0*0.9)*(pu*2.2 + aw*0.85)*rim;
+			lin += vec3(1.0)*(pu*0.35 + aw*0.13);
+			col = vec3(0.93, 0.92, 0.90)*lin*ao;
+		} else {
+			// 光环: 脉冲为高光, 苏醒为常驻圣环
+			float a = atan(pos.x, -pos.z);
+			float fidx = clamp(floor(a/TH_STEP + 12.5 + 0.5), 0.0, 25.0);
+			float pu = 0.0, aw = 0.0;
+			for (int k = 0; k < 26; k++) {
+				if (k == int(fidx)) { pu = uPulse[k]; aw = uAwaken[k]; }
+			}
+			vec3 gold = vec3(1.0, 0.84, 0.45);
+			col = mix(palette(fidx/25.0*0.9), gold, 0.35 + 0.4*aw)
+			    * (pu*(1.6 + 0.4*sin(t*4.0)) + aw*(1.0 + 0.22*sin(t*2.0 + fidx)));
+			// 神圣光辐: 沿环周旋转的放射亮瓣
+			vec3 hc = statCenter(fidx) + vec3(0., 1.68, -0.12);
+			float ha = atan(pos.z - hc.z, pos.x - hc.x);
+			float rays = pow(0.5 + 0.5*sin(ha*16.0 - t*2.2), 3.0);
+			col *= 1.0 + rays*(0.7 + 1.3*uSacred);
+			col += vec3(1.0, 0.9, 0.7)*(pu*0.5 + aw*0.35);
+		}
+		col = mix(col, sky, 1.0 - exp(-0.0022*dist*dist));
+	}
+
+	col *= 1.0 - 0.25*dot(p, p);
+	col = pow(clamp(col, 0.0, 1.0), vec3(0.4545));
+	gl_FragColor = vec4(col, 1.0);
+}`;
+
+/* ================= WebGL ================= */
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl', { antialias: false }) || canvas.getContext('experimental-webgl');
+if (!gl) { showError('当前浏览器不支持 WebGL'); throw new Error('no webgl'); }
+function compile(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+  return sh;
+}
+let prog;
+try {
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+} catch (e) { showError('Shader 编译失败:\n' + e.message); throw e; }
+gl.useProgram(prog);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+for (const name of ['iResolution','iTime','uBeat','uEnergy','uPitchN','uSeqPhase','uLightPos','uSacred',
+                    'uYaw','uPitch','uDist','uSkyPhase','uSkyWave','uSkyAmp','uSkyGlow','uSkyHue','uSkyRainbow','uSkySpeed',
+                    'uSkyZoom','uSkyShape','uSkyShapeSize','uSkyRot','uSkyCell'])
+  U[name] = gl.getUniformLocation(prog, name);
+U.uPulse = gl.getUniformLocation(prog, 'uPulse');
+U.uAwaken = gl.getUniformLocation(prog, 'uAwaken');
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.25);   // 14 尊 raymarching 较重, 控制像素量
+  const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================= 音阶与神像: 26 尊 = 26 个字母 = 半音阶两个八度 ================= */
+const N = 26;
+const NOTE_NAMES = Array.from({length: 26}, (_, k) => {
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  return names[k % 12] + (4 + Math.floor(k/12));
+});
+const FREQ = Array.from({length: 26}, (_, k) => 261.63 * Math.pow(2, k/12));
+const KEYMAP = {};                                          // KeyA..KeyZ → 0..25
+for (let k = 0; k < 26; k++) KEYMAP['Key' + String.fromCharCode(65 + k)] = k;
+const KEYCHAR = Array.from({length: 26}, (_, k) => String.fromCharCode(65 + k));
+
+const state = {
+  yaw: 0, pitch: 0.16, dist: 13.6,
+  mouse: { x: innerWidth/2, y: innerHeight/2 },
+  pulses: new Float32Array(N),
+  awaken: new Float32Array(N), awakenT: new Float32Array(N),   // 终章苏醒进度
+  sacred: 0,                                                    // 神圣天空强度
+  beat: 0, energy: 0, pitchN: 0, pitchT: 0, seqPhase: 0, seqPhaseT: 0,
+};
+let seqActive = false, seqEndTime = 0, finaleActive = false, finaleBus = null;
+
+/* ---------- 音效: 风底噪 + 神明歌声(钟/拨弦) ---------- */
+let actx = null, master = null, echoBus = null;
+function audioInit() {
+  if (actx) { if (actx.state === 'suspended') actx.resume().catch(()=>{}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  actx = new AC();
+  master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
+  const len = Math.floor(actx.sampleRate*2), nbuf = actx.createBuffer(1, len, actx.sampleRate);
+  const d = nbuf.getChannelData(0); let last = 0;
+  for (let i = 0; i < len; i++) { last = (last + 0.02*(Math.random()*2-1))/1.02; d[i] = last*3.5; }
+  const noise = actx.createBufferSource(); noise.buffer = nbuf; noise.loop = true;
+  const nlp = actx.createBiquadFilter(); nlp.type = 'lowpass'; nlp.frequency.value = 220;
+  const ng = actx.createGain(); ng.gain.value = 0.045;
+  noise.connect(nlp); nlp.connect(ng); ng.connect(master); noise.start();
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.07;
+  const lfoG = actx.createGain(); lfoG.gain.value = 0.018;
+  lfo.connect(lfoG); lfoG.connect(ng.gain); lfo.start();
+  echoBus = actx.createGain(); echoBus.gain.value = 1;
+  const echo = actx.createDelay(1.0); echo.delayTime.value = 0.29;
+  const echoG = actx.createGain(); echoG.gain.value = 0.28;
+  echoBus.connect(master); echoBus.connect(echo);
+  echo.connect(echoG); echoG.connect(echo); echoG.connect(master);
+}
+function tone(f, when, dur, vol, type = 'sine', dest) {
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(dest || master);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function bell(f, when, dur = 1.6, vol = 0.16) {   // 低音神: 温暖钟声
+  tone(f, when, dur, vol);
+  tone(f*2.01, when, dur*0.55, vol*0.3);
+  tone(f*2.99, when, dur*0.3, vol*0.12);
+}
+function chime(f, when, dur = 1.1, vol = 0.15) {  // 高音神: 明亮钟琴
+  tone(f, when, dur, vol, 'triangle');
+  tone(f*2.0, when, dur*0.5, vol*0.35, 'sine');
+  tone(f*3.01, when, dur*0.25, vol*0.18, 'sine');
+}
+function noteSound(i, when, vel = 1) {
+  const f = FREQ[i];
+  if (i < 13) bell(f, when, 1.5, 0.15*vel);
+  else        chime(f, when, 1.0, 0.15*vel);
+  if (i >= 13) tone(f*0.5, when, 0.8, 0.05*vel, 'sine');   // 高音补一层低倍频增加厚度
+}
+function tick(hi) { if (actx) tone(hi ? 1568 : 880, actx.currentTime, 0.06, 0.03); }
+function whoosh() {
+  if (!actx) return;
+  const t0 = actx.currentTime, dur = 0.35;
+  const n = Math.floor(actx.sampleRate*dur), b = actx.createBuffer(1, n, actx.sampleRate);
+  const ch = b.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random()*2-1)*(1 - i/n);
+  const src = actx.createBufferSource(); src.buffer = b;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+  bp.frequency.setValueAtTime(320, t0);
+  bp.frequency.exponentialRampToValueAtTime(950, t0 + dur);
+  const g = actx.createGain(); g.gain.value = 0.05;
+  src.connect(bp); bp.connect(g); g.connect(master);
+  src.start(t0);
+}
+
+/* ---------- 触发一个音符(声音 + 神像脉动 + 天空律动) ---------- */
+const vq = [];   // 可视化事件队列 {t(音频时钟), i}
+function triggerNote(i, when, vel = 1) {
+  if (i < 0 || i >= N) return;
+  noteSound(i, when ?? (actx ? actx.currentTime : 0), vel);
+  vq.push({ t: when ?? (actx ? actx.currentTime : 0), i });
+}
+
+/* ---------- 节奏音游: 判定/计分/结算 ---------- */
+const fxCanvas = document.getElementById('fx');
+const fctx = fxCanvas.getContext('2d');
+const rhud = document.getElementById('rhud');
+const comboEl = rhud.querySelector('.combo');
+const scoreEl = rhud.querySelector('.score');
+const resultsEl = document.getElementById('results');
+function palRGB(x){ const w = 6.28318*x;
+  return `rgb(${Math.round(255*(0.5+0.5*Math.cos(w)))},${Math.round(255*(0.5+0.5*Math.cos(w+2.094)))},${Math.round(255*(0.5+0.5*Math.cos(w+4.188)))})`;
+}
+const rg = { active: false, notes: [], pend: 0, score: 0, combo: 0, maxCombo: 0,
+             counts: { p: 0, g: 0, o: 0, m: 0 }, floats: [], laneX: [], laneY: [], laneHalf: 46 };
+const APPROACH = 1.6;                       // 音符下落时长(秒)
+const WIN_P = 0.06, WIN_G = 0.13, WIN_O = 0.22;
+
+function startRhythm(seq, step, t0) {
+  rg.active = true; rg.pend = 0; rg.score = 0; rg.combo = 0; rg.maxCombo = 0;
+  rg.counts = { p: 0, g: 0, o: 0, m: 0 }; rg.floats.length = 0;
+  rg.notes = [];
+  seq.forEach((idx, k) => { if (idx >= 0) rg.notes.push({ i: idx, t: t0 + k*step, judged: false }); });
+  resultsEl.classList.remove('show');
+  rhud.style.display = 'block';
+}
+function judge(i, when) {
+  if (!rg.active || i < 0 || i >= N) return false;
+  let best = null, bd = 1;
+  for (let k = rg.pend; k < rg.notes.length; k++) {
+    const n = rg.notes[k];
+    if (n.t > when + WIN_O) break;
+    if (n.judged || n.i !== i) continue;
+    const d = Math.abs(n.t - when);
+    if (d < bd) { bd = d; best = n; }
+  }
+  if (!best || bd > WIN_O) return false;
+  best.judged = true;
+  let txt, col, pts;
+  if (bd <= WIN_P)      { txt = '圣光'; col = '#ffd97a'; pts = 1000; rg.counts.p++; }
+  else if (bd <= WIN_G) { txt = '微光'; col = '#a8d8ff'; pts = 600;  rg.counts.g++; }
+  else                  { txt = '擦过'; col = '#c9b8ff'; pts = 250;  rg.counts.o++; }
+  rg.combo++; rg.maxCombo = Math.max(rg.maxCombo, rg.combo);
+  rg.score += pts + Math.min(rg.combo, 40)*10;
+  const c = statWorld(best.i), s = projectPt([c[0], 1.45, c[2]]);
+  if (s) rg.floats.push({ x: s.x, y: s.y - 46, txt, col, life: 1 });
+  state.pulses[best.i] = 1;
+  return true;
+}
+function laneAt(x, y) {
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < N; i++) {
+    if (rg.laneX[i] == null) continue;
+    const d = Math.abs(x - rg.laneX[i]);
+    if (d < rg.laneHalf && y < rg.laneY[i] + 80 && d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+function finishRhythm() {
+  rg.active = false;
+  seqActive = false;
+  rhud.style.display = 'none';
+  const total = rg.notes.length*1000 || 1;
+  const pct = rg.score/total;
+  let rank, ev;
+  if      (pct >= 0.97) { rank = 'SSS'; ev = '神 之 共 鸣'; }
+  else if (pct >= 0.92) { rank = 'SS';  ev = '圣 殿 之 光'; }
+  else if (pct >= 0.85) { rank = 'S';   ev = '金 声 玉 振'; }
+  else if (pct >= 0.72) { rank = 'A';   ev = '和 谐 乐 章'; }
+  else if (pct >= 0.55) { rank = 'B';   ev = '初 窥 圣 径'; }
+  else                  { rank = 'C';   ev = '尚 需 修 行'; }
+  resultsEl.querySelector('.rank').textContent = rank;
+  resultsEl.querySelector('.eval').textContent = ev;
+  resultsEl.querySelector('.score-line').textContent = `总 分 ${rg.score}`;
+  resultsEl.querySelector('.detail').innerHTML =
+    `圣光 ${rg.counts.p} · 微光 ${rg.counts.g} · 擦过 ${rg.counts.o} · 错过 ${rg.counts.m}<br>最大连击 ${rg.maxCombo}`;
+  resultsEl.classList.add('show');
+  setTimeout(() => resultsEl.classList.remove('show'), 9000);
+  // 结束音: 神圣和弦自天而降
+  if (actx) {
+    const t0 = actx.currentTime + 0.2;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, k) => chime(f, t0 + k*0.07, 2.6, 0.13));
+    bell(261.63, t0, 3.0, 0.18);
+  }
+  startFinale();                               // 诸神苏醒圣咏作为庆典
+}
+
+/* ================= 单词试炼: 听写拼写模式 ================= */
+const WORDS = [
+  ["abandon","放弃；抛弃"],["absorb","吸收；理解"],["abundant","丰富的；充裕的"],
+  ["accelerate","加速；促进"],["accompany","陪伴；伴随"],["accomplish","完成；实现"],
+  ["accumulate","积累；积聚"],["accurate","精确的；准确的"],["acknowledge","承认；致谢"],
+  ["acquire","获得；取得"],["adapt","适应；改编"],["adequate","足够的；适当的"],
+  ["advocate","提倡；拥护"],["allocate","分配；拨给"],["ambiguous","模糊不清的；有歧义的"],
+  ["anticipate","预期；预料"],["appreciate","感激；欣赏"],["appropriate","恰当的；合适的"],
+  ["artificial","人造的；人工的"],["assess","评估；评定"],["assume","假定；承担"],
+  ["attain","达到；获得"],["attribute","把…归因于；属性"],["authority","权威；当局"],
+  ["campaign","运动；活动"],["capacity","容量；能力"],["category","种类；范畴"],
+  ["challenge","挑战；质疑"],["collaborate","合作；协作"],["compensate","补偿；弥补"],
+  ["component","组成部分；部件"],["comprehensive","全面的；综合的"],["concentrate","集中；专心"],
+  ["conclude","得出结论；结束"],["consequence","后果；结果"],["considerable","相当大的；可观的"],
+  ["contribute","贡献；捐献"],["convince","说服；使确信"],["cultivate","培养；耕作"],
+  ["decline","下降；衰退；婉拒"],["dedicate","奉献；致力于"],["demonstrate","证明；演示"],
+  ["distribute","分发；分布"],["diverse","多种多样的"],["eliminate","消除；淘汰"],
+  ["emerge","出现；浮现"],["emphasize","强调；着重"],["enhance","提高；增强"],
+  ["establish","建立；创立"],["estimate","估计；估算"],["evaluate","评估；评价"],
+  ["evident","明显的；显然的"],["evolve","进化；演变"],["facilitate","促进；使便利"],
+  ["fundamental","基本的；根本的"],["generate","产生；引起"],["identify","识别；鉴定"],
+  ["illustrate","说明；阐明"],["implement","实施；执行"],["imply","暗示；意味着"],
+  ["indicate","表明；指出"],["individual","个人的；个体"],["innovation","创新；革新"],
+  ["insight","洞察力；见识"],["investigate","调查；研究"],["maintain","维持；保养"],
+  ["negotiate","谈判；协商"],["participate","参加；参与"],["phenomenon","现象"],
+  ["potential","潜在的；潜力"],["precise","精确的；确切的"],["previous","以前的；先前的"],
+  ["principle","原则；原理"],["promote","促进；提升"],["pursue","追求；从事"],
+  ["reflect","反射；反思"],["relevant","相关的；切题的"],["significant","重要的；显著的"],
+  ["strategy","策略；战略"],["sustainable","可持续的"]
+];
+const wordHud = document.getElementById('wordHud');
+const wordCard = document.getElementById('wordCard');
+const btnWord = document.getElementById('btnWord');
+let wordMode = false, wordPhase = 'off';        // off/typing/feedback/review/rating
+let roundWords = [], roundIdx = 0, roundCorrect = 0, typed = '', curWord = null;
+let wordTried = false, wordMistakes = 0, lastFeedbackOk = false;
+let playedNotes = [], songTimers = [], reviewTimer = null, songBus = null;
+
+function speak(text, rate = 0.92) {
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = rate;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function startWordMode() {
+  wordMode = true;
+  stopSeq(); rg.active = false; rhud.style.display = 'none';
+  resultsEl.classList.remove('show');
+  btnWord.textContent = '⏹ 结束试炼';
+  startWordRound();
+}
+function stopWordMode() {
+  wordMode = false; wordPhase = 'off';
+  clearSong();
+  wordHud.style.display = 'none'; wordCard.style.display = 'none';
+  btnWord.textContent = '📖 单词试炼';
+}
+function startWordRound() {
+  roundIdx = 0; roundCorrect = 0; wordMistakes = 0; playedNotes = [];
+  nextWord();
+}
+function nextWord() {
+  if (roundIdx >= 10) { startReviewSong(); return; }
+  if (roundIdx === 0 && !wordTried && roundCorrect === 0 && wordMistakes === 0)
+    roundWords = shuffle(WORDS).slice(0, 10);
+  curWord = roundWords[roundIdx];
+  typed = ''; wordTried = false; wordPhase = 'typing';
+  wordHud.style.display = 'block';
+  wordCard.style.display = 'none';
+  renderWordHud();
+  speak(curWord[0]);
+}
+function renderWordHud() {
+  const shown = typed.toUpperCase().split('').join(' ');
+  const blanks = Array(Math.max(0, curWord[0].length - typed.length)).fill('_').join(' ');
+  wordHud.querySelector('.wtitle').innerHTML =
+    `🔊 听写 <span class="widx">${roundIdx + 1} / 10</span>` +
+    (wordTried ? `<span class="widx">· 重拼中</span>` : '') +
+    `<button id="btnReplay">🔁 重听</button>` +
+    `<div class="wslots">${shown}${shown ? '  ' : ''}${blanks}</div>` +
+    `<div class="wdots">${Array.from({length: 10}, (_, k) => `<span class="${k < roundIdx ? 'on' : ''}">◆</span>`).join('')}</div>`;
+  document.getElementById('btnReplay').onclick = () => speak(curWord[0]);
+}
+function typeLetter(ch) {
+  if (wordPhase !== 'typing' || !curWord || typed.length >= curWord[0].length) return;
+  const idx = ch.charCodeAt(0) - 97;
+  typed += ch; playedNotes.push(idx);
+  triggerNote(idx);                              // 对应神像发光奏音
+  renderWordHud();
+}
+function submitWord() {
+  if (wordPhase !== 'typing') return;
+  wordPhase = 'feedback';
+  const ok = typed === curWord[0];
+  lastFeedbackOk = ok;
+  if (ok) {
+    if (!wordTried) roundCorrect++;              // 一次拼对才计入正确率
+    wordCard.className = 'good'; wordCard.style.display = 'block';
+    wordCard.innerHTML = `✓ 正确 · <b>${curWord[0]}</b><span class="cn">${curWord[1]}</span>`;
+    songTimers.push(setTimeout(() => { roundIdx++; nextWord(); }, 2400));
+  } else {
+    wordTried = true; wordMistakes++;
+    wordCard.className = 'bad'; wordCard.style.display = 'block';
+    wordCard.innerHTML = `✗ 拼写错误 · 正确拼写 <b>${curWord[0]}</b><span class="cn">${curWord[1]} · 请重新拼写 (回车跳过等待)</span>`;
+    songTimers.push(setTimeout(retryWord, 4600));
+  }
+  speak(curWord[0]);
+}
+function retryWord() {                           // 错词重拼: 同一个单词重新来过
+  songTimers.forEach(clearTimeout); songTimers = [];
+  typed = ''; wordPhase = 'typing';
+  wordCard.style.display = 'none';
+  renderWordHud();
+  speak(curWord[0]);
+}
+function startReviewSong() {
+  wordPhase = 'review';
+  wordHud.style.display = 'none'; wordCard.style.display = 'none';
+  if (!actx) audioInit();
+  let mel = playedNotes.slice(-96);
+  if (mel.length < 16) mel = mel.concat(new Array(16 - mel.length).fill(0).map((_, k) => mel[k % mel.length]));
+  const STEP = 0.23;
+  songBus = actx.createGain(); songBus.gain.value = 0.9;
+  const echo = actx.createDelay(1.0); echo.delayTime.value = 0.3;
+  const echoG = actx.createGain(); echoG.gain.value = 0.3;
+  songBus.connect(master); songBus.connect(echo);
+  echo.connect(echoG); echoG.connect(echo); echoG.connect(master);
+  const t0 = actx.currentTime + 0.3;
+  const CH = [[0,4,7],[5,9,12],[9,12,16],[7,11,14]];
+  mel.forEach((idx, k) => {
+    vq.push({ t: t0 + k*STEP, i: idx });
+    tone(FREQ[idx], t0 + k*STEP, 0.5, 0.09, k % 2 ? 'sine' : 'triangle', songBus);
+    if (k % 8 === 0) {
+      const ch = CH[Math.floor(k/8) % 4];
+      for (const s of ch) songPad(HF(s), t0 + k*STEP, STEP*8);
+      tone(HF(ch[0])/2, t0 + k*STEP, STEP*7, 0.08, 'sine', songBus);
+    }
+  });
+  const dur = mel.length*STEP + 1.5;
+  // 复习巩固: 循环播报这 10 个单词及释义
+  let ri = 0;
+  const showWord = () => {
+    const w = roundWords[ri % 10];
+    wordCard.className = 'review'; wordCard.style.display = 'block';
+    wordCard.innerHTML = `📖 <b>${w[0]}</b><span class="cn">${w[1]}</span>`;
+    speak(w[0]);
+    ri++;
+  };
+  showWord();
+  reviewTimer = setInterval(showWord, 2300);
+  songTimers.push(setTimeout(() => { clearSong(); showRating(); }, (t0 - actx.currentTime + dur)*1000));
+}
+function songPad(f, when, dur) {
+  if (!actx) return;
+  const o = actx.createOscillator(), lp = actx.createBiquadFilter(), g = actx.createGain();
+  o.type = 'triangle'; o.frequency.value = f;
+  lp.type = 'lowpass'; lp.frequency.value = 900;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(0.03, when + 0.3);
+  g.gain.setValueAtTime(0.03, when + dur - 0.2);
+  g.gain.linearRampToValueAtTime(0.0001, when + dur + 0.15);
+  o.connect(lp); lp.connect(g); g.connect(songBus);
+  o.start(when); o.stop(when + dur + 0.2);
+}
+function clearSong() {
+  songTimers.forEach(clearTimeout); songTimers = [];
+  if (reviewTimer) { clearInterval(reviewTimer); reviewTimer = null; }
+  if (songBus) { try { songBus.disconnect(); } catch (e) {} songBus = null; }
+  try { speechSynthesis.cancel(); } catch (e) {}
+}
+function showRating() {
+  wordPhase = 'rating';
+  wordHud.style.display = 'none'; wordCard.style.display = 'none';
+  const pct = roundCorrect/10;
+  let rank, ev;
+  if      (pct >= 0.97) { rank = 'SSS'; ev = '词 汇 之 神'; }
+  else if (pct >= 0.90) { rank = 'SS';  ev = '过 目 不 忘'; }
+  else if (pct >= 0.80) { rank = 'S';   ev = '出 口 成 章'; }
+  else if (pct >= 0.70) { rank = 'A';   ev = '渐 入 佳 境'; }
+  else if (pct >= 0.60) { rank = 'B';   ev = '稳 步 积 累'; }
+  else                  { rank = 'C';   ev = '再 接 再 厉'; }
+  resultsEl.querySelector('.rank').textContent = rank;
+  resultsEl.querySelector('.eval').textContent = ev;
+  resultsEl.querySelector('.score-line').textContent = `正确率 ${Math.round(pct*100)}%（${roundCorrect}/10）`;
+  resultsEl.querySelector('.detail').innerHTML = `一次拼对 ${roundCorrect}/10 · 误拼 ${wordMistakes} 次<br>按 回车 / 点击屏幕 开始下一轮 10 词`;
+  resultsEl.classList.add('show');
+  if (actx) {
+    const t0 = actx.currentTime + 0.2;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, k) => chime(f, t0 + k*0.07, 2.4, 0.12));
+    bell(261.63, t0, 3.0, 0.18);
+  }
+}
+function nextRound() {
+  if (wordPhase !== 'rating') return;
+  resultsEl.classList.remove('show');
+  wordPhase = 'off';
+  startWordRound();
+}
+btnWord.addEventListener('click', () => { audioInit(); wordMode ? stopWordMode() : startWordMode(); });
+function drawFx(at, dt) {
+  const W = fxCanvas.width = innerWidth, H = fxCanvas.height = innerHeight;
+  fctx.clearRect(0, 0, W, H);
+  // 车道投影
+  for (let i = 0; i < N; i++) {
+    const c = statWorld(i), s = projectPt([c[0], 1.45, c[2]]);
+    rg.laneX[i] = s ? s.x : null; rg.laneY[i] = s ? s.y : null;
+  }
+  let gap = 0, cnt = 0;
+  for (let i = 1; i < N; i++)
+    if (rg.laneX[i] != null && rg.laneX[i-1] != null) { gap += Math.abs(rg.laneX[i]-rg.laneX[i-1]); cnt++; }
+  if (cnt) rg.laneHalf = Math.max(24, Math.min(70, (gap/cnt)/2 - 4));
+
+  if (rg.active) {
+    // 判定线 + 下落音符
+    for (let k = rg.pend; k < rg.notes.length; k++) {
+      const n = rg.notes[k];
+      if (n.t > at + APPROACH) break;
+      if (n.judged || rg.laneX[n.i] == null) continue;
+      const lx = rg.laneX[n.i], jy = rg.laneY[n.i];
+      const p = Math.max(0, Math.min(1, 1 - (n.t - at)/APPROACH));
+      const y = 50 + (jy - 50)*p;
+      const near = Math.max(0, 1 - Math.abs(n.t - at)/0.3);
+      fctx.strokeStyle = `rgba(255,217,122,${0.12 + 0.25*near})`;
+      fctx.lineWidth = 1;
+      fctx.beginPath(); fctx.moveTo(lx, 50); fctx.lineTo(lx, jy); fctx.stroke();
+      fctx.strokeStyle = `rgba(255,217,122,${0.35 + 0.55*near})`;
+      fctx.lineWidth = 2 + 2*near;
+      fctx.beginPath(); fctx.moveTo(lx - rg.laneHalf*0.8, jy); fctx.lineTo(lx + rg.laneHalf*0.8, jy); fctx.stroke();
+      fctx.font = '10px Menlo, monospace'; fctx.fillStyle = 'rgba(255,236,190,.6)';
+      fctx.textAlign = 'center'; fctx.fillText(KEYCHAR[n.i], lx, jy + 16);
+      const col = palRGB(n.i/25*0.9);
+      fctx.save();
+      fctx.shadowColor = col; fctx.shadowBlur = 14;
+      fctx.fillStyle = col;
+      fctx.beginPath(); fctx.arc(lx, y, 10, 0, 6.2832); fctx.fill();
+      fctx.fillStyle = 'rgba(255,255,255,.85)';
+      fctx.beginPath(); fctx.arc(lx, y, 4, 0, 6.2832); fctx.fill();
+      fctx.restore();
+    }
+    comboEl.textContent = rg.combo >= 3 ? `连击 × ${rg.combo}` : '';
+    scoreEl.textContent = `得分 ${rg.score}`;
+  }
+  // 判定浮字
+  for (const f of rg.floats) {
+    f.life -= dt*1.3; f.y -= dt*36;
+    if (f.life > 0) {
+      fctx.globalAlpha = Math.min(1, f.life);
+      fctx.font = 'bold 17px "Songti SC", serif';
+      fctx.fillStyle = f.col;
+      fctx.shadowColor = f.col; fctx.shadowBlur = 10;
+      fctx.fillText(f.txt, f.x, f.y);
+      fctx.shadowBlur = 0; fctx.globalAlpha = 1;
+    }
+  }
+  rg.floats = rg.floats.filter(f => f.life > 0);
+}
+
+/* ---------- 天空参数: 参数实验室同步 ---------- */
+const SKY_DEFAULT = { phase: 0.07, wave: 7, amp: 1, glow: 0.01, hue: 0, rainbow: 0, speed: 1,
+                      zoom: 1, shape: 0, size: 0, rot: 0, cell: 2 };
+const sky = Object.assign({}, SKY_DEFAULT);
+function skyApply(o) {
+  if (!o || typeof o !== 'object') return;
+  for (const k of Object.keys(SKY_DEFAULT))
+    if (typeof o[k] === 'number' && isFinite(o[k])) sky[k] = o[k];
+  sky.glow = Math.min(0.05, Math.max(0, sky.glow));
+  sky.wave = Math.min(25, Math.max(0, sky.wave));
+  sky.amp  = Math.min(2,  Math.max(0, sky.amp));
+  sky.speed = Math.min(3, Math.max(0, sky.speed));
+  sky.zoom = Math.min(3, Math.max(0.3, sky.zoom));
+  sky.shape = Math.min(12, Math.max(0, Math.round(sky.shape)));
+  sky.size = Math.min(0.45, Math.max(0, sky.size));
+  sky.rot = Math.min(360, Math.max(0, sky.rot));
+  sky.cell = Math.min(4, Math.max(1.2, sky.cell));
+}
+try { const s = localStorage.getItem('sanctuary.sky'); if (s) skyApply(JSON.parse(s)); } catch (e) {}
+window.addEventListener('storage', e => {
+  if (e.key === 'sanctuary.sky') { try { skyApply(JSON.parse(e.newValue || '{}')); } catch (_) {} }
+});
+setInterval(() => {
+  try { const s = localStorage.getItem('sanctuary.sky'); if (s) skyApply(JSON.parse(s)); } catch (e) {}
+}, 1000);
+
+/* ---------- 相机与拾取 ---------- */
+const TARGET = [0, 0.95, -1.2], FOC = 1.4;
+function camBasis() {
+  const cy = Math.cos(state.pitch), sy = Math.sin(state.pitch);
+  const cx = Math.cos(state.yaw),   sx = Math.sin(state.yaw);
+  const ro = [TARGET[0] + state.dist*sx*cy, TARGET[1] + state.dist*sy, TARGET[2] + state.dist*cx*cy];
+  let fw = [TARGET[0]-ro[0], TARGET[1]-ro[1], TARGET[2]-ro[2]];
+  const fl = Math.hypot(...fw); fw = fw.map(v => v/fl);
+  let rt = [-fw[2], 0, fw[0]];
+  const rl = Math.hypot(...rt) || 1; rt = rt.map(v => v/rl);
+  const up = [rt[1]*fw[2]-rt[2]*fw[1], rt[2]*fw[0]-rt[0]*fw[2], rt[0]*fw[1]-rt[1]*fw[0]];
+  return { ro, fw, rt, up };
+}
+function statWorld(i) {
+  const a = (i - 12.5)*0.105;
+  return [Math.sin(a)*7.4, 0, -Math.cos(a)*7.4];
+}
+function projectPt(c) {
+  const { ro, fw, rt, up } = camBasis();
+  const v = [c[0]-ro[0], c[1]-ro[1], c[2]-ro[2]];
+  const z = v[0]*fw[0] + v[1]*fw[1] + v[2]*fw[2];
+  if (z < 0.2) return null;
+  const H = canvas.clientHeight, W = canvas.clientWidth;
+  const nx = (v[0]*rt[0]+v[1]*rt[1]+v[2]*rt[2]) / z * FOC;
+  const ny = (v[0]*up[0]+v[1]*up[1]+v[2]*up[2]) / z * FOC;
+  return { x: nx*H + W/2, y: H/2 - ny*H, z };
+}
+function pick(x, y) {   // 屏幕距离最近的神像(头/身两点大命中圈), 边缘神像同样可点
+  const anchors = [ [1.5, 0.05, 0.72], [0.55, 0.0, 0.8] ];
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < N; i++) {
+    const c = statWorld(i);
+    for (const a of anchors) {
+      const s = projectPt([c[0], a[0], c[2] + a[1]]);
+      if (!s) continue;
+      const d = Math.hypot(x - s.x, y - s.y);
+      const R = a[2]/s.z*FOC*canvas.clientHeight;
+      if (d < R && d < bd) { bd = d; best = i; }
+    }
+  }
+  return best;
+}
+
+/* ---------- 输入: 拖拽/滚轮/点击/键盘 ---------- */
+let dragging = false, downX = 0, downY = 0, moved = 0, whooshed = false, lastHover = -2, lastTick = 0;
+canvas.addEventListener('pointerdown', e => {
+  audioInit();
+  dragging = true; moved = 0; whooshed = false; downX = e.clientX; downY = e.clientY;
+  canvas.classList.add('dragging');
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  state.mouse.x = e.clientX; state.mouse.y = e.clientY;
+  if (dragging) {
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    if (!whooshed && moved > 12) { whoosh(); whooshed = true; }
+    state.yaw += dx*0.005;
+    state.pitch = Math.max(0.02, Math.min(1.15, state.pitch - dy*0.005));
+    downX = e.clientX; downY = e.clientY;
+  } else {
+    const h = pick(e.clientX, e.clientY);
+    if (h !== lastHover && h >= 0 && performance.now() - lastTick > 120) { tick(true); lastTick = performance.now(); }
+    lastHover = h;
+    canvas.classList.toggle('hover', h >= 0);
+  }
+});
+window.addEventListener('pointerup', e => {
+  if (!dragging) return;
+  dragging = false;
+  canvas.classList.remove('dragging');
+  if (moved < 6) {
+    if (wordMode) {                                    // 单词试炼: 点击神像 = 拼入该字母
+      audioInit();
+      if (wordPhase === 'rating') { nextRound(); return; }
+      if (wordPhase === 'typing') {
+        const i = pick(e.clientX, e.clientY);
+        if (i >= 0) typeLetter(String.fromCharCode(97 + i));
+      }
+      return;
+    }
+    if (rg.active) {                                   // 音游中: 点击车道 = 判定
+      audioInit();
+      const li = laneAt(e.clientX, e.clientY);
+      if (li >= 0) judge(li, actx.currentTime);
+    } else {
+      const i = pick(e.clientX, e.clientY);
+      if (i >= 0) { audioInit(); if (finaleActive) endFinale(); triggerNote(i); }
+    }
+  }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  state.dist = Math.max(7, Math.min(20, state.dist*Math.exp(e.deltaY*0.001)));
+  if (performance.now() - lastTick > 80) { tick(false); lastTick = performance.now(); }
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (document.activeElement === seqInput) return;     // 输入乐谱时不触发
+  if (wordMode) {                                      // 单词试炼: 按键 = 拼字
+    audioInit();
+    if (e.code === 'Enter') {
+      if (wordPhase === 'typing') submitWord();
+      else if (wordPhase === 'feedback') {
+        songTimers.forEach(clearTimeout); songTimers = [];
+        if (lastFeedbackOk) { roundIdx++; nextWord(); } else retryWord();
+      }
+      else if (wordPhase === 'rating') nextRound();
+      e.preventDefault(); return;
+    }
+    if (e.code === 'Backspace' && wordPhase === 'typing') {
+      typed = typed.slice(0, -1); renderWordHud(); e.preventDefault(); return;
+    }
+    if (/^Key[A-Z]$/.test(e.code)) {
+      const ch = e.code.slice(3).toLowerCase();
+      if (wordPhase === 'typing') typeLetter(ch);
+      else if (wordPhase === 'rating') nextRound();
+      e.preventDefault(); return;
+    }
+    return;
+  }
+  const i = KEYMAP[e.code];
+  if (i !== undefined) {
+    audioInit();
+    if (rg.active) judge(i, actx.currentTime);         // 音游中: 按键 = 判定
+    else triggerNote(i);                               // 自由弹奏
+    e.preventDefault();
+  }
+});
+
+/* ---------- 乐谱(序列)演奏 ---------- */
+const seqInput = document.getElementById('seqInput');
+const feedback = document.getElementById('feedback');
+const tempoEl = document.getElementById('tempo');
+const tempoVal = document.getElementById('tempoVal');
+tempoEl.addEventListener('input', () => tempoVal.textContent = tempoEl.value + 'ms');
+
+function parseSeq(text) {
+  const out = [];
+  for (const raw of text.trim().split(/[\s,;]+/)) {
+    if (!raw) continue;
+    if (raw === '-' || raw === '0') { out.push(-1); continue; }
+    if (raw.length === 1 && /[a-z]/i.test(raw)) {
+      out.push(raw.toLowerCase().charCodeAt(0) - 97);      // 字母 a–z → 神像 0–25
+      continue;
+    }
+    const m = /^([a-g])(#?)([456])$/.exec(raw);            // 音名: c4 / f#5 ...
+    if (m) {
+      const base = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[m[1]];
+      const idx = (Number(m[3]) - 4)*12 + base + (m[2] ? 1 : 0);
+      if (idx >= 0 && idx < N) { out.push(idx); continue; }
+    }
+    out.push(-2);   // 无法识别
+  }
+  return out;
+}
+
+let seqTimer = null;
+function stopSeq() {
+  if (seqTimer) { clearInterval(seqTimer); seqTimer = null; }
+}
+function playSeq() {
+  audioInit();
+  stopSeq();
+  endFinale();                                   // 新乐谱开始前先收回终章
+  const seq = parseSeq(seqInput.value);
+  const bad = seq.filter(x => x === -2).length;
+  feedback.textContent = bad ? `⚠ ${bad} 个无法识别` : `${seq.length} 个音`;
+  setTimeout(() => feedback.textContent = '', 2600);
+  if (!seq.length) return;
+  const step = Number(tempoEl.value)/1000;
+  let t0 = actx.currentTime + 0.12;
+  for (const idx of seq) {
+    if (idx >= 0) triggerNote(idx, t0);
+    t0 += step;
+  }
+  startRhythm(seq, step, actx.currentTime + 0.12);
+  seqActive = true;
+  seqEndTime = t0 + 0.35;                        // 最后一个音落定后触发结算
+  return t0;
+}
+document.getElementById('btnPlay').addEventListener('click', playSeq);
+document.getElementById('btnStop').addEventListener('click', () => {
+  stopSeq();
+  rg.active = false; rhud.style.display = 'none';
+  resultsEl.classList.remove('show'); rg.floats.length = 0;
+  endFinale();
+});
+seqInput.addEventListener('keydown', e => { if (e.code === 'Enter') playSeq(); });
+
+/* ---------- 终章: 乐谱演奏完毕 → 诸神苏醒 → 圣咏响起 ---------- */
+// 卡农风格圣咏 (C 大调): 和弦 C G Am Em F C F G × 两遍变奏 + 终止式
+const HF = s => 261.63*Math.pow(2, s/12);        // 以 C4 为 0 的半音频率
+const CANON = [
+  { chord: [0,2,4],    bass: 0, mel: [9] },        // C  E5
+  { chord: [4,6,8],    bass: 4, mel: [8] },        // G  D5
+  { chord: [5,7,9],    bass: 5, mel: [7] },        // Am C5
+  { chord: [4,6,9],    bass: 2, mel: [6] },        // Em B4
+  { chord: [3,5,7],    bass: 3, mel: [5] },        // F  A4
+  { chord: [0,4,7],    bass: 0, mel: [4] },        // C  G4
+  { chord: [3,5,7],    bass: 3, mel: [5] },        // F  A4
+  { chord: [4,6,8],    bass: 4, mel: [6] },        // G  B4
+];
+const CANON_VAR = [ [7,9,7,4], [8,11,8,6], [7,9,7,5], [6,9,6,4],
+                    [7,10,7,5], [4,7,9,7], [5,7,10,7], [6,8,11,8] ];   // 第二遍琶音变奏
+const HYMN_BEAT = 0.5, HYMN_CHORD = HYMN_BEAT*4;  // 每和弦 2 秒
+
+function scheduleHymn(t0) {
+  // 第一遍: 长音圣咏
+  CANON.forEach((c, ci) => {
+    const t = t0 + ci*HYMN_CHORD;
+    if (ci % 2 === 0) boom(t);
+    for (const s of c.chord) pad(HF(s), t, HYMN_CHORD*0.98);
+    pad(HF(c.bass), t, HYMN_CHORD*0.9, 0.09);                  // 低音
+    vq.push({ t, i: c.mel[0] });                               // 神明亮起
+    tone(HF(c.mel[0]), t, HYMN_CHORD*0.92, 0.10, 'triangle', finaleBus);
+    tone(HF(c.mel[0])*2, t + 0.02, HYMN_CHORD*0.5, 0.035, 'sine', finaleBus);
+  });
+  const t1 = t0 + CANON.length*HYMN_CHORD;
+  // 第二遍: 琶音变奏
+  CANON_VAR.forEach((arp, ci) => {
+    const t = t1 + ci*HYMN_CHORD;
+    const c = CANON[ci];
+    if (ci % 2 === 0) boom(t);
+    for (const s of c.chord) pad(HF(s), t, HYMN_CHORD*0.98);
+    pad(HF(c.bass), t, HYMN_CHORD*0.9, 0.09);
+    arp.forEach((s, k) => {
+      vq.push({ t: t + k*HYMN_BEAT, i: s });
+      tone(HF(s), t + k*HYMN_BEAT, HYMN_BEAT*1.6, 0.085, k%2 ? 'sine' : 'triangle', finaleBus);
+    });
+  });
+  // 终止式: 定音鼓 + 全体神明齐鸣 C 大三和弦 + 高音 C
+  const tEnd = t1 + CANON.length*HYMN_CHORD;
+  boom(tEnd); boom(tEnd + 0.45);
+  [0, 4, 7, 9, 12].forEach((s, k) => {
+    vq.push({ t: tEnd, i: [7, 9, 11, 4, 0][k] ?? 7 });
+    tone(HF(s), tEnd, 2.6, 0.10, k === 0 ? 'sine' : 'triangle', finaleBus);
+  });
+  pad(HF(0), tEnd, 2.6, 0.10); pad(HF(4), tEnd, 2.6, 0.08); pad(HF(7), tEnd, 2.6, 0.08);
+  return tEnd + 3.0;
+}
+function pad(f, when, dur, vol = 0.032) {        // 圣咏和声垫(双振失谐 = 人声合唱感)
+  if (!actx) return;
+  const o = actx.createOscillator(), lp = actx.createBiquadFilter(), g = actx.createGain();
+  o.type = 'triangle'; o.frequency.value = f;
+  const o2 = actx.createOscillator(), g2 = actx.createGain();
+  o2.type = 'triangle'; o2.frequency.value = f*1.0045; g2.gain.value = 0.5;
+  lp.type = 'lowpass'; lp.frequency.value = 950;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(vol, when + 0.4);
+  g.gain.setValueAtTime(vol, when + dur - 0.35);
+  g.gain.linearRampToValueAtTime(0.0001, when + dur + 0.2);
+  o.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(g); g.connect(finaleBus);
+  o.start(when); o.stop(when + dur + 0.3);
+  o2.start(when); o2.stop(when + dur + 0.3);
+}
+function boom(when) {                            // 定音鼓(低音下坠)
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(105, when);
+  o.frequency.exponentialRampToValueAtTime(65.4, when + 0.09);
+  g.gain.setValueAtTime(0.26, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when + 0.65);
+  o.connect(g); g.connect(finaleBus);
+  o.start(when); o.stop(when + 0.7);
+}
+function riser(when) {                           // 升腾: 滤波噪声扫频, 衔接用户旋律与圣咏
+  const dur = 1.05;
+  const n = Math.floor(actx.sampleRate*dur), b = actx.createBuffer(1, n, actx.sampleRate);
+  const ch = b.getChannelData(0);
+  for (let i = 0; i < n; i++) { const p = i/n; ch[i] = (Math.random()*2 - 1)*p*p; }
+  const src = actx.createBufferSource(); src.buffer = b;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.0;
+  bp.frequency.setValueAtTime(280, when);
+  bp.frequency.exponentialRampToValueAtTime(3400, when + dur);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(0.06, when + dur*0.8);
+  g.gain.linearRampToValueAtTime(0.0001, when + dur + 0.12);
+  src.connect(bp); bp.connect(g); g.connect(master);
+  src.start(when);
+}
+function startFinale() {
+  if (finaleActive || !actx) return;
+  finaleActive = true;
+  finaleBus = actx.createGain(); finaleBus.gain.value = 0.95;
+  const echo = actx.createDelay(1.0); echo.delayTime.value = 0.42;
+  const echoG = actx.createGain(); echoG.gain.value = 0.36;
+  finaleBus.connect(master); finaleBus.connect(echo);
+  echo.connect(echoG); echoG.connect(echo); echoG.connect(master);
+  // ① 升腾音效 (你的旋律余韵 → 拉向圣域)
+  riser(actx.currentTime + 0.05);
+  // ② 上行音浪: 诸神依次苏醒, 每尊苏醒时唱出自己的音 (C4 一路爬到 B5)
+  const base = actx.currentTime + 1.05;
+  for (let i = 0; i < N; i++) {
+    const tw = base + i*0.115;
+    vq.push({ t: tw, i });
+    noteSound(i, tw, 0.55);
+    setTimeout(() => { state.awakenT[i] = 1; }, Math.max(0, (tw - actx.currentTime)*1000 - 60));
+  }
+  // ③ 圣咏紧接音浪顶点响起
+  scheduleHymn(actx.currentTime + 3.45);
+}
+function endFinale() {
+  seqActive = false;
+  if (!finaleActive) return;
+  finaleActive = false;
+  for (let i = 0; i < N; i++) state.awakenT[i] = 0;
+  if (actx && finaleBus) {
+    finaleBus.gain.setTargetAtTime(0.0, actx.currentTime, 0.5);
+    setTimeout(() => { try { finaleBus.disconnect(); } catch (e) {} finaleBus = null; }, 2200);
+  }
+  vq.length = 0;                                 // 丢弃未播放的圣咏可视化事件
+}
+
+/* ---------- 渲染循环 ---------- */
+let frame = 0, lastT = 0, fps = 60;
+function render(nowMs) {
+  const now = nowMs/1000;
+  const dt = Math.min(0.1, Math.max(0.001, now - lastT)); lastT = now;
+  fps = fps*0.95 + (1/dt)*0.05;
+
+  // 消费可视化事件(音频时钟精确触发)
+  const at = actx ? actx.currentTime : 0;
+  while (vq.length && vq[0].t <= at + 0.02) {
+    const ev = vq.shift();
+    state.pulses[ev.i] = 1;
+    state.beat = 1;
+    state.pitchT = ev.i/(N-1);                     // 目标值: 渲染循环里平滑趋近
+    state.seqPhaseT += 0.09 + 0.05*(ev.i/(N-1));
+    state.energy = Math.min(1, state.energy + 0.22);
+  }
+  // 音游: 漏判自动记错过; 音符全部处理完 → 结算
+  if (rg.active) {
+    while (rg.pend < rg.notes.length && rg.notes[rg.pend].t < at - WIN_O) {
+      const n = rg.notes[rg.pend];
+      if (!n.judged) {
+        n.judged = true; rg.counts.m++; rg.combo = 0;
+        const c = statWorld(n.i), s = projectPt([c[0], 1.45, c[2]]);
+        if (s) rg.floats.push({ x: s.x, y: s.y - 46, txt: '错过', col: '#8a8a92', life: 1 });
+      }
+      rg.pend++;
+    }
+    if (seqActive && at > seqEndTime + 0.35) finishRhythm();
+  }
+  // 衰减
+  const kP = Math.exp(-2.6*dt), kE = Math.exp(-0.55*dt), kB = Math.exp(-2.2*dt);
+  for (let i = 0; i < N; i++) state.pulses[i] *= kP;
+  state.energy = 0.06 + (state.energy - 0.06)*kE;
+  state.beat *= kB;
+  // 平滑趋近: 分形相位与音高色相连续演化, 不再逐音硬跳
+  const kS = Math.min(1, dt*2.2);
+  state.seqPhase += (state.seqPhaseT - state.seqPhase)*kS;
+  state.pitchN += (state.pitchT - state.pitchN)*kS;
+
+  // 终章触发: 乐谱播完 → 诸神苏醒 + 圣咏
+  if (seqActive && !rg.active && actx && actx.currentTime > seqEndTime) { seqActive = false; startFinale(); }
+  // 苏醒/神圣度缓动
+  const kA = Math.min(1, dt*2.6);
+  for (let i = 0; i < N; i++)
+    state.awaken[i] += (state.awakenT[i] - state.awaken[i])*kA;
+  const sacredT = finaleActive ? 1 : 0;
+  state.sacred += (sacredT - state.sacred)*Math.min(1, dt*0.8);
+
+  resize();
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  const lp = (() => {
+    const { ro, fw, rt, up } = camBasis();
+    const H = canvas.clientHeight, W = canvas.clientWidth;
+    const nx = (state.mouse.x - W/2)/(H/2), ny = (H/2 - state.mouse.y)/(H/2);
+    let rd = [fw[0]*1.4 + rt[0]*nx + up[0]*ny, fw[1]*1.4 + rt[1]*nx + up[1]*ny, fw[2]*1.4 + rt[2]*nx + up[2]*ny];
+    const l = Math.hypot(...rd); rd = rd.map(v => v/l);
+    return [ro[0]+rd[0]*5.5, ro[1]+rd[1]*5.5, ro[2]+rd[2]*5.5];
+  })();
+  gl.uniform3f(U.iResolution, canvas.width, canvas.height, 1);
+  gl.uniform1f(U.iTime, now);
+  gl.uniform1fv(U.uPulse, state.pulses);
+  gl.uniform1fv(U.uAwaken, state.awaken);
+  gl.uniform1f(U.uSacred, state.sacred);
+  gl.uniform1f(U.uBeat, state.beat);
+  gl.uniform1f(U.uEnergy, state.energy);
+  gl.uniform1f(U.uPitchN, state.pitchN);
+  gl.uniform1f(U.uSeqPhase, state.seqPhase);
+  gl.uniform3f(U.uLightPos, lp[0], lp[1], lp[2]);
+  gl.uniform1f(U.uYaw, state.yaw);
+  gl.uniform1f(U.uPitch, state.pitch);
+  gl.uniform1f(U.uDist, state.dist);
+  gl.uniform1f(U.uSkyPhase, sky.phase);
+  gl.uniform1f(U.uSkyWave, sky.wave);
+  gl.uniform1f(U.uSkyAmp, sky.amp);
+  gl.uniform1f(U.uSkyGlow, sky.glow/0.01);
+  gl.uniform1f(U.uSkyHue, sky.hue);
+  gl.uniform1f(U.uSkyRainbow, sky.rainbow);
+  gl.uniform1f(U.uSkySpeed, sky.speed);
+  gl.uniform1f(U.uSkyZoom, sky.zoom);
+  gl.uniform1f(U.uSkyShape, sky.shape);
+  gl.uniform1f(U.uSkyShapeSize, sky.size);
+  gl.uniform1f(U.uSkyRot, sky.rot*Math.PI/180);
+  gl.uniform1f(U.uSkyCell, sky.cell);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  drawFx(at, dt);
+
+  if (frame % 20 === 0) document.getElementById('perf').textContent =
+    `${canvas.width}×${canvas.height} · ${fps.toFixed(0)} fps`;
+  frame++;
+}
+function loop(nowMs) {
+  try { render(nowMs); }
+  catch (e) { window.__renderErr = String(e && e.message || e); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* 供自动化测试/调试 */
+window.__game = {
+  state, pick, parseSeq, FREQ, NOTE_NAMES, KEYMAP, rg, judge,
+  word: () => ({ phase: wordPhase, word: curWord && curWord[0], typed, roundIdx, roundCorrect,
+                 played: playedNotes.length, words: roundWords.map(w => w[0]) }),
+  typeLetter, submitWord, nextRound, startWordMode,
+  audio: () => ({ ctx: actx && actx.state, now: actx ? actx.currentTime : 0,
+                  pulses: Array.from(state.pulses).map(v => +v.toFixed(2)),
+                  awaken: Array.from(state.awaken).map(v => +v.toFixed(2)),
+                  sacred: +state.sacred.toFixed(2), finale: finaleActive,
+                  beat: +state.beat.toFixed(2), energy: +state.energy.toFixed(2),
+                  seqPhase: +state.seqPhase.toFixed(2) }),
+  playSeq, startFinale, endFinale,
+};
+</script>
+</body>
+</html>

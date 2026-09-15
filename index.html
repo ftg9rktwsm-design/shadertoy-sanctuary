@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creation — Shadertoy XsXXDn 本地复刻</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+  #hud {
+    position: fixed; top: 10px; left: 12px;
+    font: 12px/1.6 "SF Mono", Menlo, Consolas, monospace;
+    color: rgba(255,255,255,.85);
+    text-shadow: 0 1px 3px rgba(0,0,0,.9);
+    pointer-events: none; user-select: none;
+  }
+  #hud a { color: #9cf; text-decoration: none; pointer-events: auto; }
+  #hud .dim { color: rgba(255,255,255,.5); }
+  #err {
+    position: fixed; inset: 0; display: none; overflow: auto;
+    padding: 24px; background: #200; color: #f88;
+    font: 13px/1.5 Menlo, Consolas, monospace; white-space: pre-wrap;
+  }
+
+  /* ---------- 参数面板 ---------- */
+  #panel {
+    position: fixed; top: 10px; right: 12px; width: 262px;
+    background: rgba(10,12,16,.62); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 9px;
+    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
+    color: rgba(255,255,255,.92); overflow: hidden;
+    box-shadow: 0 4px 18px rgba(0,0,0,.45);
+  }
+  #panelHead {
+    padding: 8px 12px; cursor: pointer; user-select: none;
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255,255,255,.06);
+  }
+  #panelHead b { font-weight: 600; letter-spacing: .5px; }
+  #toggle { color: #9cf; }
+  #panelBody { padding: 10px 12px 6px; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row .lab { width: 88px; flex: none; }
+  .row .val { width: 56px; flex: none; text-align: right; color: #9cf; }
+  .row input[type=range] { flex: 1; accent-color: #6cf; min-width: 0; }
+  #panelBtns { display: flex; gap: 6px; padding: 6px 12px 10px; }
+  #panelBtns button {
+    flex: 1; font: 11px Menlo, Consolas, monospace; color: #dde;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 5px; padding: 4px 0; cursor: pointer;
+  }
+  #panelBtns button:hover { background: rgba(255,255,255,.2); }
+  #panelBtns button.primary { background: rgba(108,192,255,.28); border-color: rgba(108,192,255,.55); }
+  #panelBtns button.primary:hover { background: rgba(108,192,255,.45); }
+  #panel.collapsed #panelBody, #panel.collapsed #panelBtns { display: none; }
+</style>
+</head>
+<body>
+<canvas id="glcanvas"></canvas>
+<div id="hud">
+  <b>Creation</b> <span class="dim">— Danilo Guanabara (Silexars)</span><br>
+  <a href="https://www.shadertoy.com/view/XsXXDn" target="_blank">shadertoy.com/view/XsXXDn</a>
+  <span class="dim"> · 本地复刻</span><br>
+  <span id="stats"></span><br>
+  <span class="dim">空格: 暂停/继续 · R: 重置时间 · 拖动鼠标: iMouse / 3D 视角环绕</span><br>
+  <a href="game.html">🎮 圣殿小游戏 →</a> <span class="dim">色相/波纹/流速等会实时同步为圣殿天空</span>
+</div>
+
+<div id="panel">
+  <div id="panelHead"><b>参数调节</b><span id="toggle">收起</span></div>
+  <div id="panelBody"></div>
+  <div id="panelBtns">
+    <button id="btnRandom" class="primary">🎲 随机</button>
+    <button id="btnPause">暂停</button>
+    <button id="btnReset">重置时间</button>
+    <button id="btnDefaults">恢复默认</button>
+  </div>
+</div>
+
+<pre id="err"></pre>
+
+<!-- ====== Shadertoy XsXXDn 原始 shader（作者要求署名: Danilo Guanabara）======
+     参数化版本: 原版写死的常数改为 uniform, 各默认值 = 原版效果
+     本地扩展: 形状系统(圆点/三角/方形/任意多边形), 不设形状时与原版逐像素一致 -->
+<script id="shader-main" type="x-shader/x-fragment">// http://www.pouet.net/prod.php?which=57245
+// If you intend to reuse this shader, please add credits to 'Danilo Guanabara'
+// 原版常数: 相位步长 .07 / 波纹频率 9. / 位移强度 1. / 光点亮度 .01
+// 本地扩展: 参数化 + 形状系统 + 3D 晶格模式 + 色相控制; 默认值 = 原版效果
+
+#define t iTime
+#define r iResolution.xy
+
+uniform float uPhaseStep;   // 每次迭代的相位步长(默认 .07) — 越大 RGB 色散越强
+uniform float uWaveFreq;    // 波纹空间频率(默认 9.) — 环形细节密度
+uniform float uAmp;         // 位移强度(默认 1.) — 图案拉伸形变幅度
+uniform float uGlow;        // 光点亮度(默认 .01)
+uniform float uZoom;        // 画面缩放(默认 1., 仅平面模式)
+uniform float uShapeN;      // 形状边数(默认 0=圆/球; 3=三角 4=方 5=五边 ...)
+uniform float uShapeSize;   // 形状大小(默认 0=原版圆点光斑)
+uniform float uShapeRot;    // 形状旋转角(弧度, 默认 0)
+uniform float uMode;        // 渲染维度(0=平面 1=3D 晶格)
+uniform float uHue;         // 色相旋转(度)
+uniform float uRainbow;     // 彩虹流动: 颜色随空间/时间变化的强度
+uniform float uCell;        // 3D 晶格间距
+uniform float uYaw;         // 3D 相机偏航(鼠标拖拽)
+uniform float uPitch;       // 3D 相机俯仰(鼠标拖拽)
+
+// ---------- 颜色工具 ----------
+vec3 hsv2rgb(vec3 c){
+	vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + K.xyz)*6.0 - K.www);
+	return c.z*mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+vec3 rgb2hsv(vec3 c){
+	// 注意: 不能用 .r 分量名 — 源码顶部 #define r 会把单独的 r 标记展开
+	float mx = max(c.x, max(c.y, c.z));
+	float mn = min(c.x, min(c.y, c.z));
+	float df = mx - mn;
+	float h = 0.0;
+	if (mx > mn) {
+		if (mx == c.x)      h = fract((c.y - c.z)/df);
+		else if (mx == c.y) h = (c.z - c.x)/df + 2.0/3.0;
+		else                h = (c.x - c.y)/df + 4.0/3.0;
+	}
+	float s = mx > 1e-5 ? df/mx : 0.0;
+	return vec3(fract(h), s, mx);
+}
+vec3 applyHue(vec3 col, float h){
+	vec3 hsv = rgb2hsv(max(col, 0.0));
+	if (hsv.z < 1e-5) return col;
+	hsv.x = fract(hsv.x + h);
+	return hsv2rgb(hsv);
+}
+vec3 palette(float x){
+	return 0.5 + 0.5*cos(6.28318530718*x + vec3(0.0, 2.094, 4.188));
+}
+
+// ---------- 2D: 单元格内到形状边缘的距离(未启用形状时=原版) ----------
+float shapeDist(vec2 q){
+	float rr = length(q);
+	if (uShapeSize <= 0.0 || uShapeN < 2.5) return rr;
+	float a = atan(q.y, q.x) + uShapeRot;
+	float sector = 6.28318530718 / uShapeN;
+	float polyR = cos(3.14159265359 / uShapeN) / cos(mod(a, sector) - 0.5*sector);
+	return rr - polyR * uShapeSize;
+}
+
+// ---------- 3D: 晶格单元内的形状距离场(圆->球, 多边形->棱柱) ----------
+float sdPrism(vec3 q){
+	if (uShapeN < 2.5) return length(q) - uShapeSize;
+	float a = atan(q.y, q.x) + uShapeRot;
+	float sector = 6.28318530718 / uShapeN;
+	float polyR = cos(3.14159265359 / uShapeN) / cos(mod(a, sector) - 0.5*sector);
+	float dxy = length(q.xy) - polyR * uShapeSize;
+	float dz = abs(q.z) - uShapeSize;
+	return min(max(dxy, dz), 0.0) + length(max(vec2(dxy, dz), 0.0));
+}
+
+// ---------- 3D 渲染: 穿越无限发光晶格的隧道 ----------
+vec3 render3D(vec2 fragCoord){
+	vec2 p = (fragCoord.xy - 0.5*r) / r.y;
+	// 与平面版同源的屏幕空间涡旋 warp
+	float ll = max(length(p), 1e-4);
+	vec2 warp = p/ll*(sin(t)+1.)*uAmp*abs(sin(ll*uWaveFreq - t - t));
+	vec2 pc = p + warp*0.1;
+
+	// 相机: 随时间沿视线前进(默认视角斜穿晶格避免正对轴心), 鼠标拖拽环绕
+	vec3 fw = vec3(sin(uYaw+0.4)*cos(uPitch+0.25), sin(uPitch+0.25), -cos(uYaw+0.4)*cos(uPitch+0.25));
+	vec3 rt = normalize(cross(fw, vec3(0., 1., 0.)));
+	vec3 up = cross(rt, fw);
+	vec3 rd = normalize(fw*1.4 + rt*pc.x + up*pc.y);
+	vec3 ro = fw * (t * 1.5);   // t 已含播放速度(CPU 侧作用于 iTime)
+
+	// raymarch: 记录光线到晶格形状的最近距离 — 原版 1/dist 审美的三维版
+	float minD = 1e9, dDist = 60.0;
+	float dist = 0.05;
+	for (int i = 0; i < 40; i++) {
+		vec3 pos = ro + rd*dist;
+		vec3 q = pos/uCell + vec3(0.27, 0.19, 0.0);   // 错开晶格轴
+		float d = sdPrism(mod(q, 1.0) - 0.5);
+		if (d < minD) { minD = d; dDist = dist; }
+		dist += max(d*uCell*0.85, 0.04);
+		if (dist > 60.0) break;
+	}
+	minD = max(minD, 1e-4);
+	vec3 hitPos = ro + rd*dDist;
+	float x = (hitPos.z/uCell)*0.3 + t*0.05 + uHue/360.0 + uRainbow*length(hitPos)*0.08;
+	vec3 col = palette(x) * (uGlow*0.75/(minD*minD + 1e-6)) * exp(-dDist*0.055);
+	return vec3(1.0) - exp(-col*1.3);
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord ){
+	vec3 c;
+	float l,z=t;
+	for(int i=0;i<3;i++) {
+		vec2 uv,p=(fragCoord.xy/r-.5)*uZoom+.5;
+		uv=p;
+		p-=.5;
+		p.x*=r.x/r.y;
+		z+=uPhaseStep;
+		l=length(p);
+		uv+=p/l*(sin(z)+1.)*uAmp*abs(sin(l*uWaveFreq-z-z));
+		c[i]=uGlow/abs(shapeDist(mod(uv,1.)-.5));
+	}
+	fragColor=vec4(c/l,t);
+	// 颜色控制: 色相旋转 + 彩虹流动(默认 0 时与原版一致)
+	fragColor.rgb = applyHue(fragColor.rgb, uHue/360.0 + uRainbow*(l*0.2 + t*0.03));
+}</script>
+
+<script>
+'use strict';
+
+/* ---------- Shadertoy 兼容的公共前缀（模拟 Shadertoy 运行环境） ---------- */
+const SHADERTOY_PREFIX = `precision highp float;
+precision highp int;
+
+uniform vec3  iResolution;      // 视口分辨率 (宽, 高, 像素比)
+uniform float iTime;            // 运行时间(秒)
+uniform float iTimeDelta;       // 帧间隔
+uniform float iFrameRate;       // 帧率
+uniform int   iFrame;           // 帧号
+uniform vec4  iMouse;           // xy=点击位置 zw=拖动位置(按下为正, 松开为负)
+uniform vec4  iDate;            // (年, 月, 日, 当日秒数)
+uniform float iChannelTime[4];
+uniform vec3  iChannelResolution[4];
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform sampler2D iChannel2;
+uniform sampler2D iChannel3;
+`;
+
+// 与 Shadertoy 相同的包装: 把 mainImage 接到真正的 main() 上（必须放在 mainImage 定义之后）
+const SHADERTOY_SUFFIX = `
+void main(){ mainImage(gl_FragColor, gl_FragCoord.xy); }
+`;
+
+const VS_SOURCE = `attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+/* ---------- 可调参数定义（value = 默认值, 与原版一致; rmin/rmax = 随机按钮的范围） ---------- */
+const PARAMS = [
+  { u: 'uMode',      label: '渲染维度',   min: 0,     max: 1,    step: 1,      value: 0, rmin: 0,     rmax: 1,
+    fmt: v => v < 0.5 ? '平面' : '3D 空间' },
+  { u: 'uHue',       label: '色相旋转',   min: 0,     max: 360,  step: 1,      value: 0, rmin: 0,     rmax: 360,
+    fmt: v => v.toFixed(0) + '°' },
+  { u: 'uRainbow',   label: '彩虹流动',   min: 0,     max: 1,    step: 0.01,   value: 0, rmin: 0,     rmax: 1 },
+  { u: 'uSpeed',     label: '播放速度',   min: 0,     max: 3,    step: 0.01,   value: 1, rmin: 0.3,   rmax: 2.5 },
+  { u: 'uZoom',      label: '画面缩放',   min: 0.3,   max: 3,    step: 0.01,   value: 1, rmin: 0.5,   rmax: 2.5 },
+  { u: 'uPhaseStep', label: '相位间隔',   min: 0,     max: 0.3,  step: 0.001,  value: 0.07, rmin: 0.01, rmax: 0.25 },
+  { u: 'uWaveFreq',  label: '波纹频率',   min: 0,     max: 30,   step: 0.1,    value: 9, rmin: 2,     rmax: 28 },
+  { u: 'uAmp',       label: '位移强度',   min: 0,     max: 3,    step: 0.01,   value: 1, rmin: 0.3,   rmax: 2.5 },
+  { u: 'uGlow',      label: '光点亮度',   min: 0,     max: 0.05, step: 0.0005, value: 0.01, rmin: 0.004, rmax: 0.04 },
+  { u: 'uShapeN',    label: '形状边数',   min: 0,     max: 12,   step: 1,      value: 0, rmin: 3,     rmax: 12,
+    fmt: v => v < 0.5 ? '圆点' : v.toFixed(0) + ' 边形' },
+  { u: 'uShapeSize', label: '形状大小',   min: 0,     max: 0.45, step: 0.005,  value: 0, rmin: 0.1,   rmax: 0.42 },
+  { u: 'uShapeRot',  label: '形状旋转',   min: 0,     max: 360,  step: 1,      value: 0, rmin: 0,     rmax: 360,
+    fmt: v => v.toFixed(0) + '°' },
+  { u: 'uCell',      label: '晶格间距',   min: 1.2,   max: 4,    step: 0.05,   value: 2.0, rmin: 1.4, rmax: 3.5 },
+];
+
+const canvas = document.getElementById('glcanvas');
+const errBox = document.getElementById('err');
+const stats  = document.getElementById('stats');
+
+const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false })
+        || canvas.getContext('experimental-webgl');
+if (!gl) { showError('当前浏览器不支持 WebGL'); throw new Error('no webgl'); }
+
+function showError(msg) { errBox.textContent = msg; errBox.style.display = 'block'; }
+
+function compile(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    throw new Error(gl.getShaderInfoLog(sh) || 'shader compile failed');
+  }
+  return sh;
+}
+
+let program;
+try {
+  const vs = compile(gl.VERTEX_SHADER, VS_SOURCE);
+  const fs = compile(gl.FRAGMENT_SHADER, SHADERTOY_PREFIX + document.getElementById('shader-main').textContent + SHADERTOY_SUFFIX);
+  program = gl.createProgram();
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(program) || 'link failed');
+  }
+} catch (e) { showError('Shader 编译失败:\n' + e.message); throw e; }
+gl.useProgram(program);
+
+// 全屏三角形（覆盖整个视口，超出部分被裁掉）
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(program, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+for (const name of ['iResolution','iTime','iTimeDelta','iFrameRate','iFrame','iMouse','iDate',
+                    'uSpeed','uZoom','uPhaseStep','uWaveFreq','uAmp','uGlow',
+                    'uShapeN','uShapeSize','uShapeRot','uMode','uHue','uRainbow','uCell','uYaw','uPitch']) {
+  U[name] = gl.getUniformLocation(program, name);
+}
+
+/* ---------- 窗口尺寸（含 devicePixelRatio，与 Shadertoy 一致以像素为单位） ---------- */
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(canvas.clientWidth  * dpr);
+  const h = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- iMouse 模拟（Shadertoy 行为: 按下记录原点，拖动更新，松开后 zw 变负） ---------- */
+const mouse = { x: 0, y: 0, z: 0, w: 0, down: false };
+const orbit = { yaw: 0, pitch: 0, lx: 0, ly: 0 };   // 3D 模式: 拖拽环绕视角
+function canvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = canvas.width / Math.max(1, canvas.clientWidth);
+  return [ (e.clientX - rect.left) * dpr,
+           (rect.height - (e.clientY - rect.top)) * dpr ]; // GL 坐标系 y 向上
+}
+canvas.addEventListener('mousedown', e => {
+  const [x, y] = canvasPos(e);
+  mouse.x = x; mouse.y = y; mouse.z = x; mouse.w = y; mouse.down = true;
+  orbit.lx = e.clientX; orbit.ly = e.clientY;
+});
+canvas.addEventListener('mousemove', e => {
+  if (!mouse.down) return;
+  const [x, y] = canvasPos(e);
+  mouse.z = x; mouse.w = y;
+  orbit.yaw += (e.clientX - orbit.lx) * 0.005;
+  orbit.pitch = Math.max(-1.35, Math.min(1.35, orbit.pitch - (e.clientY - orbit.ly) * 0.005));
+  orbit.lx = e.clientX; orbit.ly = e.clientY;
+});
+window.addEventListener('mouseup', () => { mouse.down = false; });
+
+/* ---------- 参数面板 ---------- */
+/* ---------- 参数同步: 推送给圣殿小游戏(game.html)的天空背景 ---------- */
+let skyWriteTimer = null;
+function writeSky() {
+  clearTimeout(skyWriteTimer);
+  skyWriteTimer = setTimeout(() => {
+    try {
+      localStorage.setItem('sanctuary.sky', JSON.stringify({
+        phase: params.uPhaseStep, wave: params.uWaveFreq, amp: params.uAmp,
+        glow: params.uGlow, hue: params.uHue, rainbow: params.uRainbow, speed: params.uSpeed,
+        zoom: params.uZoom, shape: params.uShapeN, size: params.uShapeSize,
+        rot: params.uShapeRot, cell: params.uCell,
+      }));
+    } catch (e) {}
+  }, 150);
+}
+
+const panel = document.getElementById('panel');
+const panelBody = document.getElementById('panelBody');
+const params = {};   // uniform 名 -> 当前值
+
+for (const p of PARAMS) {
+  params[p.u] = p.value;
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = p.label;
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = p.value;
+  const val = document.createElement('span'); val.className = 'val';
+  const dec = (String(p.step).split('.')[1] || '').length;
+  const show = () => { val.textContent = p.fmt ? p.fmt(+inp.value) : (+inp.value).toFixed(dec); };
+  inp.addEventListener('input', () => { params[p.u] = +inp.value; show(); writeSky(); });
+  show();
+  row.append(lab, inp, val);
+  panelBody.append(row);
+  p.input = inp; p.show = show;
+}
+
+// 启动时恢复上次调节的状态(与圣殿共享同一份快照), 避免重开页面后覆盖之前参数
+try {
+  const saved = JSON.parse(localStorage.getItem('sanctuary.sky') || 'null');
+  if (saved) {
+    const back = { phase: 'uPhaseStep', wave: 'uWaveFreq', amp: 'uAmp', glow: 'uGlow',
+                   hue: 'uHue', rainbow: 'uRainbow', speed: 'uSpeed', zoom: 'uZoom',
+                   shape: 'uShapeN', size: 'uShapeSize', rot: 'uShapeRot', cell: 'uCell' };
+    for (const [k, u] of Object.entries(back)) {
+      if (typeof saved[k] === 'number' && isFinite(saved[k]) && params[u] !== undefined) {
+        params[u] = saved[k];
+        const p = PARAMS.find(q => q.u === u);
+        p.input.value = saved[k];
+        p.show();
+      }
+    }
+  }
+} catch (e) {}
+
+function resetParams() {
+  for (const p of PARAMS) { params[p.u] = p.value; p.input.value = p.value; p.show(); }
+  writeSky();
+}
+document.getElementById('btnDefaults').addEventListener('click', resetParams);
+
+// 随机: 在安全范围(避开冻结/全黑等退化组合)内随机所有参数
+function randomizeParams() {
+  for (const p of PARAMS) {
+    const lo = p.rmin ?? p.min, hi = p.rmax ?? p.max;
+    p.input.value = lo + Math.random() * (hi - lo);
+    params[p.u] = +p.input.value;   // 读回经过 step 吸附后的值, 保证与显示一致
+    p.show();
+  }
+  writeSky();
+}
+document.getElementById('btnRandom').addEventListener('click', randomizeParams);
+
+/* ---------- 暂停 / 重置（按钮与快捷键共用） ---------- */
+let paused = false, timeBase = 0, pauseAt = 0;
+const btnPause = document.getElementById('btnPause');
+function setPaused(v) {
+  paused = v;
+  if (paused) pauseAt = performance.now() / 1000;
+  else timeBase += performance.now() / 1000 - pauseAt;
+  btnPause.textContent = paused ? '继续' : '暂停';
+}
+function resetTime() { timeBase = performance.now() / 1000; pauseAt = 0; paused = false; btnPause.textContent = '暂停'; orbit.yaw = 0; orbit.pitch = 0; }
+btnPause.addEventListener('click', () => setPaused(!paused));
+document.getElementById('btnReset').addEventListener('click', resetTime);
+
+document.getElementById('panelHead').addEventListener('click', () => {
+  panel.classList.toggle('collapsed');
+  document.getElementById('toggle').textContent = panel.classList.contains('collapsed') ? '展开' : '收起';
+});
+
+window.addEventListener('keydown', e => {
+  // 焦点在滑杆/按钮上时把按键留给控件本身
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
+    if (e.code === 'Space') e.target.blur();
+    return;
+  }
+  if (e.code === 'Space') { e.preventDefault(); setPaused(!paused); }
+  else if (e.code === 'KeyR') resetTime();
+});
+
+/* ---------- 渲染循环 ---------- */
+let frame = 0, lastFrameT = 0, fps = 0;
+timeBase = performance.now() / 1000;
+
+function render(nowMs) {
+  const now = nowMs / 1000;
+  const rawTime = paused ? (pauseAt - timeBase) : (now - timeBase);
+  const time = rawTime * params.uSpeed;          // 播放速度作用在 iTime 上
+  const dt = Math.min(0.1, Math.max(0, now - lastFrameT));
+  lastFrameT = now;
+  if (dt > 0) fps = fps * 0.95 + (1 / Math.max(dt, 1e-4)) * 0.05;
+
+  resize();
+  gl.viewport(0, 0, canvas.width, canvas.height);
+
+  if (U.iResolution) gl.uniform3f(U.iResolution, canvas.width, canvas.height, canvas.width / Math.max(1, canvas.height));
+  if (U.iTime)       gl.uniform1f(U.iTime, time);
+  if (U.iTimeDelta)  gl.uniform1f(U.iTimeDelta, dt);
+  if (U.iFrameRate)  gl.uniform1f(U.iFrameRate, fps);
+  if (U.iFrame)      gl.uniform1i(U.iFrame, frame);
+  if (U.iMouse)      gl.uniform4f(U.iMouse, mouse.x, mouse.y,
+                                 mouse.down ?  mouse.z : -Math.abs(mouse.z),
+                                 mouse.down ?  mouse.w : -Math.abs(mouse.w));
+  if (U.iDate) {
+    const d = new Date();
+    gl.uniform4f(U.iDate, d.getFullYear(), d.getMonth() + 1, d.getDate(),
+                 d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000);
+  }
+  if (U.uZoom)      gl.uniform1f(U.uZoom, params.uZoom);
+  if (U.uPhaseStep) gl.uniform1f(U.uPhaseStep, params.uPhaseStep);
+  if (U.uWaveFreq)  gl.uniform1f(U.uWaveFreq, params.uWaveFreq);
+  if (U.uAmp)       gl.uniform1f(U.uAmp, params.uAmp);
+  if (U.uGlow)      gl.uniform1f(U.uGlow, params.uGlow);
+  if (U.uShapeN)    gl.uniform1f(U.uShapeN, params.uShapeN);
+  if (U.uShapeSize) gl.uniform1f(U.uShapeSize, params.uShapeSize);
+  if (U.uShapeRot)  gl.uniform1f(U.uShapeRot, params.uShapeRot * Math.PI / 180);
+  if (U.uMode)      gl.uniform1f(U.uMode, params.uMode);
+  if (U.uHue)       gl.uniform1f(U.uHue, params.uHue);
+  if (U.uRainbow)   gl.uniform1f(U.uRainbow, params.uRainbow);
+  if (U.uCell)      gl.uniform1f(U.uCell, params.uCell);
+  if (U.uYaw)       gl.uniform1f(U.uYaw, orbit.yaw);
+  if (U.uPitch)     gl.uniform1f(U.uPitch, orbit.pitch);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  frame++;
+
+  if (frame % 15 === 0) {
+    stats.textContent = `${canvas.width}×${canvas.height} · ${fps.toFixed(0)} fps · t = ${time.toFixed(1)}s` + (paused ? ' · 已暂停' : '');
+  }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
