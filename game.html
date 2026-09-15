@@ -128,6 +128,22 @@
   #wordCard .cn { font: 15px "PingFang SC", sans-serif; color: rgba(255,236,190,.85);
                   letter-spacing: 1px; display: block; margin-top: 6px; }
   #wordCard b { letter-spacing: 4px; }
+  #storyCard {
+    position: fixed; bottom: 108px; left: 50%; transform: translateX(-50%);
+    display: none; width: min(480px, 88vw); text-align: left;
+    background: rgba(14,16,24,.72); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,217,122,.45); border-radius: 12px;
+    padding: 16px 20px; pointer-events: none;
+    box-shadow: 0 6px 30px rgba(0,0,0,.5), 0 0 24px rgba(255,214,130,.15);
+    color: #ffeecb; font-family: "Songti SC", "STSong", serif;
+  }
+  #storyCard .sname { font-size: 20px; letter-spacing: 3px; color: #ffd97a;
+                      text-shadow: 0 0 12px rgba(255,214,130,.6); }
+  #storyCard .sname .letter { float: right; font-size: 26px; font-family: Georgia, serif; }
+  #storyCard .sw { margin-top: 8px; font-size: 15px; letter-spacing: 1px; color: #cfe6ff; }
+  #storyCard .sw .cn { color: rgba(255,236,190,.8); font-family: "PingFang SC", sans-serif; font-size: 13px; }
+  #storyCard .sstory { margin-top: 10px; font: 13px/1.9 "PingFang SC", sans-serif;
+                       color: rgba(232,220,192,.85); letter-spacing: 0.5px; }
 
   #hint {
     position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%);
@@ -157,7 +173,7 @@
   </div>
   <div class="perf" id="perf"></div>
 </div>
-<div id="hint">📖 单词试炼: 听写 → 按字母键拼写 → 回车提交 · 拖拽 环视 · 滚轮 远近 · 自由弹奏 A–Z</div>
+<div id="hint">📖 单词试炼: 听写 → 按字母键拼写 → 回车提交 · 点击神像 奏音并听它的传说 · 拖拽 环视 · 滚轮 远近</div>
 <div id="credit">fractal sky based on "Creation" · Danilo Guanabara (Silexars)</div>
 <div id="topright"><a href="index.html">← 参数实验室</a></div>
 
@@ -175,6 +191,7 @@
   <div class="wdots"></div>
 </div>
 <div id="wordCard"></div>
+<div id="storyCard"></div>
 <canvas id="fx"></canvas>
 <div id="rhud"><div class="combo"></div><div class="score"></div></div>
 <div id="results">
@@ -256,8 +273,14 @@ vec3 statCenter(float i){
 }
 
 // ---------- 神像 ----------
-float sdPedestal(vec3 q){
+float sdPedestal(vec3 q, float style){
 	float d = sdCylY(q, 0.02, 0.62, 0.34);
+	if (style > 1.5) {                                            // 阶梯圣座
+		d = min(d, sdCylY(q, 0.0, 0.10, 0.43));
+		d = min(d, length(vec2(length(q.xz) - 0.43, q.y - 0.10)) - 0.03);
+	} else if (style > 0.5) {                                     // 笛纹石柱
+		d += 0.014*sin(atan(q.z, q.x)*12.0)*smoothstep(0.08, 0.55, q.y);
+	}
 	d = min(d, length(vec2(length(q.xz) - 0.40, q.y - 0.62)) - 0.04);
 	d = min(d, length(vec2(length(q.xz) - 0.40, q.y - 0.05)) - 0.04);
 	return d;
@@ -331,6 +354,65 @@ float sdGoddess(vec3 q){
 	d = smin(d, length(q - vec3(0., 1.185, 0.)) - 0.028, 0.03);
 	return d;
 }
+// 新原型: 持球贤者 (双手捧着知识宝珠)
+float sdSage(vec3 q){
+	float d = sdEllipsoid(q - vec3(0., 0.06, 0.), vec3(0.34, 0.09, 0.30));
+	float rob = sdEllipsoid(q - vec3(0., 0.48, 0.), vec3(0.26, 0.45, 0.21));
+	rob += 0.005*sin(q.y*38.0);
+	d = smin(d, rob, 0.06);
+	d = smin(d, length(q - vec3(0., 0.97, 0.01)) - 0.13, 0.04);
+	d = smin(d, sdEllipsoid(q - vec3(0., 1.09, 0.), vec3(0.05, 0.06, 0.05)), 0.04);
+	d = smin(d, length(q - vec3(0., 0.86, 0.19)) - 0.075, 0.05);
+	d = smin(d, length(q - vec3(0., 0.84, 0.235)) - 0.062, 0.03);
+	d = smin(d, length(q - vec3(0., 0.975, 0.12)) - 0.016, 0.02);
+	d = max(d, -(length(q - vec3( 0.048, 1.01, 0.10)) - 0.014));
+	d = max(d, -(length(q - vec3(-0.048, 1.01, 0.10)) - 0.014));
+	return d;
+}
+// 新原型: 持杖先知 (倚着高过头顶的先知杖)
+float sdProphet(vec3 q){
+	float d = sdCylY(q, 0.0, 0.06, 0.30);
+	float rob = sdCylY(q, 0.06, 0.72, 0.24);
+	rob += 0.006*sin(q.y*34.0);
+	d = smin(d, rob, 0.08);
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.62, 0.), vec3(0.24, 0.09, 0.18)), 0.05);
+	d = smin(d, sdCylY(q, 0.64, 0.78, 0.05), 0.03);
+	d = smin(d, length(q - vec3(0., 0.92, 0.01)) - 0.125, 0.04);
+	d = smin(d, length(q - vec3(0., 0.885, 0.115)) - 0.016, 0.02);
+	d = max(d, -(length(q - vec3( 0.05, 0.95, 0.10)) - 0.015));
+	d = max(d, -(length(q - vec3(-0.05, 0.95, 0.10)) - 0.015));
+	d = smin(d, sdCapsule(q, vec3(0.20, 0.62, 0.05), vec3(0.26, 0.30, 0.10), 0.045), 0.05);
+	d = min(d, sdCapsule(q, vec3(0.30, -0.02, 0.06), vec3(0.30, 1.30, 0.02), 0.035));
+	d = smin(d, length(q - vec3(0.30, 1.36, 0.02)) - 0.055, 0.02);
+	return d;
+}
+// 新原型: 展翼使者 (背负后掠双翼)
+float sdWinged(vec3 q){
+	float d = sdEllipsoid(q - vec3(0., 0.48, 0.), vec3(0.22, 0.44, 0.16));
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.03, 0.), vec3(0.28, 0.08, 0.24)), 0.06);
+	d = smin(d, sdEllipsoid(q - vec3(0., 0.90, 0.), vec3(0.125, 0.15, 0.12)), 0.04);
+	vec3 wl = q - vec3(0.16, 0.72, -0.10);
+	float w1 = smin(sdEllipsoid(wl, vec3(0.05, 0.34, 0.16)),
+	                sdEllipsoid(q - vec3(0.24, 0.60, -0.14), vec3(0.04, 0.22, 0.11)), 0.03);
+	d = smin(d, w1, 0.04);
+	vec3 wr = q - vec3(-0.16, 0.72, -0.10);
+	float w2 = smin(sdEllipsoid(wr, vec3(0.05, 0.34, 0.16)),
+	                sdEllipsoid(q - vec3(-0.24, 0.60, -0.14), vec3(0.04, 0.22, 0.11)), 0.03);
+	d = smin(d, w2, 0.04);
+	d = smin(d, length(q - vec3(0., 0.885, 0.115)) - 0.015, 0.02);
+	d = max(d, -(length(q - vec3( 0.045, 0.93, 0.095)) - 0.014));
+	d = max(d, -(length(q - vec3(-0.045, 0.93, 0.095)) - 0.014));
+	return d;
+}
+// 头饰变体: 0 环冠 / 1 高冠 / 2 翼盔 / 3 圆髻 (无饰返回 1e3)
+float sdHeadwear(vec3 q, float v){
+	if (v < 0.5) return length(vec2(length(q.xy - vec2(0., 1.02)) - 0.16, q.z*1.8)) - 0.018;
+	if (v < 1.5) return sdCylY(q - vec3(0., 0.06, 0.), 1.06, 1.18, 0.075);
+	if (v < 2.5) return min(
+		sdEllipsoid(q - vec3( 0.16, 1.02, 0.), vec3(0.07, 0.035, 0.09)),
+		sdEllipsoid(q - vec3(-0.16, 1.02, 0.), vec3(0.07, 0.035, 0.09)));
+	return length(q - vec3(0., 1.12, 0.)) - 0.05;
+}
 
 // ---------- 场景: id 0=地面 1=神像 2=光环 ----------
 vec2 opU(vec2 a, float d, float id){ return d < a.x ? vec2(d, id) : a; }
@@ -340,15 +422,23 @@ vec2 map(vec3 p){
 	for (int i = 0; i < 26; i++) {
 		float fi = float(i);
 		vec3 q = p - statCenter(fi);
-		float bs = length(q) - 1.7;                 // 包围球加速
+		float bs = length(q) - 1.9;                 // 包围球加速
 		if (bs > 0.5) { res = opU(res, bs, 1.0); continue; }
-		float sc = 0.94 + 0.05*mod(fi, 3.0);        // 每尊微差缩放
-		float d = sdPedestal(q/sc)*sc;
-		vec3 f = q/sc - vec3(0., 0.66, 0.);         // 像身基点(比例略缩小)
-		int ty = i - (i/3)*3;
+		// 每尊独立 DNA: 原型 / 头饰 / 基座 / 缩放由序号确定性派生
+		float h1 = fract(sin(fi*127.1)*43758.55);
+		float h2 = fract(sin(fi*269.5)*12543.21);
+		float h3 = fract(sin(fi*74.7)*269.5);
+		float sc = 0.90 + 0.10*h1;
+		float d = sdPedestal(q/sc, floor(h3*3.0))*sc;
+		vec3 f = q/sc - vec3(0., 0.62, 0.);
+		int ty = i - (i/6)*6;                       // 6 种原型轮换
 		if (ty == 0)      d = min(d, sdBuddha(f));
 		else if (ty == 1) d = min(d, sdPray(f));
-		else              d = min(d, sdGoddess(f));
+		else if (ty == 2) d = min(d, sdGoddess(f));
+		else if (ty == 3) d = min(d, sdSage(f));
+		else if (ty == 4) d = min(d, sdProphet(f));
+		else              d = min(d, sdWinged(f));
+		if (ty >= 3) d = min(d, sdHeadwear(f, floor(h2*4.0)));
 		res = opU(res, d*sc, 1.0);
 		// 音符光环: 发声时闪现; 终章苏醒后常驻 (主环 + 外圈细环)
 		float glow = max(uPulse[i], uAwaken[i]);
@@ -580,7 +670,7 @@ for (let k = 0; k < 26; k++) KEYMAP['Key' + String.fromCharCode(65 + k)] = k;
 const KEYCHAR = Array.from({length: 26}, (_, k) => String.fromCharCode(65 + k));
 
 const state = {
-  yaw: 0, pitch: 0.16, dist: 13.6,
+  yaw: 0, pitch: 0.14, dist: 16.5,
   mouse: { x: innerWidth/2, y: innerHeight/2 },
   pulses: new Float32Array(N),
   awaken: new Float32Array(N), awakenT: new Float32Array(N),   // 终章苏醒进度
@@ -955,6 +1045,48 @@ function nextRound() {
   startWordRound();
 }
 btnWord.addEventListener('click', () => { audioInit(); wordMode ? stopWordMode() : startWordMode(); });
+
+const storyCard = document.getElementById('storyCard');
+function showStory(i) {
+  if (i < 0 || i >= N) return;
+  const [name, title, w, m, s] = STORY[i];
+  storyCard.innerHTML =
+    `<div class="sname">${name} · ${title}<span class="letter">${KEYCHAR[i]}</span></div>` +
+    `<div class="sw">📜 ${w} <span class="cn">${m}</span></div>` +
+    `<div class="sstory">${s}</div>`;
+  storyCard.style.display = 'block';
+}
+function hideStory() { storyCard.style.display = 'none'; }
+
+/* ================= 二十六神传说: 点击神像查看 ================= */
+const STORY = [
+ ["阿班冬","放逐之神","abandon","放弃；抛弃","词源自古法语「a bandon」，意为交予众人之手。他教会世人：放下不是失去，是把背不动的行囊交给风。"],
+ ["贝内法","恩惠之神","benefit","利益；好处","拉丁语 bene facere，做好事。恩惠是她撒下的种子，落在别人田里，长成自己的荫凉。"],
+ ["库尔提瓦","耕耘之神","cultivate","培养；耕作","词根 colere，培育土地。他说：先犁开自己的心，才能播种世界。"],
+ ["德迪卡","奉献之神","dedicate","奉献；致力于","拉丁语 dedicare，郑重宣告献出。她把每一天都刻上名字，献给值得的事。"],
+ ["伊沃瓦","展开之神","evolve","进化；演变","词源 e-volvere，展开卷轴。时间不急，它把蜷缩的种子一寸寸展开成森林。"],
+ ["法西利","铺路之神","facilitate","促进；使便利","词根 facilis，易于通行。他不搬走高山，只把路修得容易一些。"],
+ ["赫内拉","诞生之神","generate","产生；引起","拉丁语 generare，生育繁衍。每个念头都是一粒会发芽的星火，由她看守。"],
+ ["赫里塔","传承之神","heritage","遗产；传统","词根 heres，继承者。你手中的光，是无数双看不见的手递来的。"],
+ ["伊诺瓦","更新之神","innovation","创新；革新","拉丁语 innovare，更新。她把旧世界的锁，重铸成新世界的钥匙。"],
+ ["朱尔尼","旅程之神","journey","旅程；旅途","古法语 journée，一天的路程。千里之遥，是从第一个「今天」开始的。"],
+ ["诺勒吉","求知之神","knowledge","知识；学问","古英语 cnāwan，认出。求知不是占有，是认出世界本来的样子。"],
+ ["莱加西","遗赠之神","legacy","遗产；遗留","拉丁语 legare，派遣与托付。最好的遗产，是别人因你而开始相信的事。"],
+ ["曼滕","持守之神","maintain","维持；坚持","词源 manus 手 + tenere 持。举灯不难，难的是风雨里不灭。"],
+ ["内戈提","磋商之神","negotiate","谈判；协商","拉丁语 nec otium，无暇闲坐。谈判桌上的和平，是双方各退一步搭成的桥。"],
+ ["欧珀图","机遇之神","opportunity","机会；时机","词源 ob portum，港口顺风。机遇是一阵风，只吹向已经扬帆的船。"],
+ ["波滕提","潜能之神","potential","潜力；潜在的","拉丁语 potentia，蕴藏的力量。你还没拧亮的那盏灯，也在等你。"],
+ ["奎斯特","追寻之神","quest","追寻；探索","拉丁语 quaerere，寻找。神从不直接给答案，只给值得追问一生的问题。"],
+ ["雷勒万","切题之神","relevant","相关的；切题的","词源 relevare，举起。世间喧嚣，他只举起与你真正有关的那部分。"],
+ ["苏斯泰纳","续力之神","sustainable","可持续的","词源 sub tenere，自下撑住。真正的强大，不是爆发的力，是能一直撑下去的力。"],
+ ["特兰斯福","蜕变之神","transform","转变；改造","拉丁语 trans formare，跨形重塑。毛虫以为世界到了尽头，她称之为羽翼。"],
+ ["尤尼可","唯一之神","unique","独一无二的","拉丁语 unus，唯一。环顾这二十六尊彼此不同的神像——你，也是。"],
+ ["维布兰特","振动之神","vibrant","充满生机的","词源 vibrare，颤动生辉。活着的意思，就是一直在微微发光。"],
+ ["韦尔法","福祉之神","welfare","福祉；福利","古英语 wel fara，福佑之旅。福祉不是终点站，是同路人手里互递的灯。"],
+ ["克塞尼娅","待客之神","xenial","好客的；主客的","希腊语 xenos，异乡客。对陌生人伸出的善意，是文明写下的第一行字。"],
+ ["伊尔德","产出之神","yield","产出；让步","古英语 geldan，偿付。土地教会神的第一课：低头付出，即是收获。"],
+ ["泽尔","热忱之神","zeal","热忱；激情","希腊语 zelos，沸腾的热忱。冷掉的炭不发光，他把心跳拨回沸点。"]
+];
 function drawFx(at, dt) {
   const W = fxCanvas.width = innerWidth, H = fxCanvas.height = innerHeight;
   fctx.clearRect(0, 0, W, H);
@@ -1126,13 +1258,14 @@ window.addEventListener('pointerup', e => {
       if (li >= 0) judge(li, actx.currentTime);
     } else {
       const i = pick(e.clientX, e.clientY);
-      if (i >= 0) { audioInit(); if (finaleActive) endFinale(); triggerNote(i); }
+      if (i >= 0) { audioInit(); if (finaleActive) endFinale(); triggerNote(i); showStory(i); }
+      else hideStory();
     }
   }
 });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  state.dist = Math.max(7, Math.min(20, state.dist*Math.exp(e.deltaY*0.001)));
+  state.dist = Math.max(8, Math.min(24, state.dist*Math.exp(e.deltaY*0.001)));
   if (performance.now() - lastTick > 80) { tick(false); lastTick = performance.now(); }
 }, { passive: false });
 
