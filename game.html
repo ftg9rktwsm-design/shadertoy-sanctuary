@@ -180,6 +180,7 @@
 <div id="console">
   <input id="seqInput" placeholder="乐谱: a s f q w u 或 c4 e4 g4 c5 (空格分隔, - 为休止)" spellcheck="false">
   <button id="btnWord">📖 单词试炼</button>
+  <button id="btnRandomScore">🎲 随机音游</button>
   <button id="btnPlay" class="primary">▶ 演奏</button>
   <button id="btnStop">■ 停止</button>
   <span class="tempo">速度 <input id="tempo" type="range" min="140" max="500" step="10" value="280"><span id="tempoVal">280ms</span></span>
@@ -764,7 +765,7 @@ function palRGB(x){ const w = 6.28318*x;
 }
 const rg = { active: false, notes: [], pend: 0, score: 0, combo: 0, maxCombo: 0,
              counts: { p: 0, g: 0, o: 0, m: 0 }, floats: [], laneX: [], laneY: [], laneHalf: 46 };
-const APPROACH = 1.6;                       // 音符下落时长(秒)
+const APPROACH = 1.9;                       // 音符下落时长(秒)
 const WIN_P = 0.06, WIN_G = 0.13, WIN_O = 0.22;
 
 function startRhythm(seq, step, t0) {
@@ -1122,10 +1123,42 @@ function drawFx(at, dt) {
       fctx.save();
       fctx.shadowColor = col; fctx.shadowBlur = 14;
       fctx.fillStyle = col;
-      fctx.beginPath(); fctx.arc(lx, y, 10, 0, 6.2832); fctx.fill();
-      fctx.fillStyle = 'rgba(255,255,255,.85)';
-      fctx.beginPath(); fctx.arc(lx, y, 4, 0, 6.2832); fctx.fill();
+      fctx.beginPath(); fctx.arc(lx, y, 11, 0, 6.2832); fctx.fill();
+      fctx.shadowBlur = 0;
+      fctx.fillStyle = 'rgba(255,255,255,.95)';
+      fctx.font = 'bold 13px Menlo, monospace';
+      fctx.fillText(KEYCHAR[n.i], lx, y + 5);
       fctx.restore();
+    }
+    // 顶部超大按键指南: 当前要按的键 + 后续两个预告
+    let shownN = 0;
+    for (let k = rg.pend; k < rg.notes.length && shownN < 3; k++) {
+      const n = rg.notes[k];
+      if (n.judged) continue;
+      const rem = Math.max(0, n.t - at);
+      const isCur = shownN === 0;
+      const size = isCur ? 118 : (shownN === 1 ? 52 : 36);
+      const gx = W/2 + (shownN === 0 ? 0 : (shownN === 1 ? 130 : 205));
+      const gy = isCur ? 172 : 128;
+      const col = palRGB(n.i/25*0.9);
+      fctx.save();
+      fctx.globalAlpha = isCur ? 1 : Math.max(0.22, 0.62 - shownN*0.18);
+      fctx.font = `bold ${size}px Georgia, serif`;
+      fctx.textAlign = 'center';
+      fctx.shadowColor = col; fctx.shadowBlur = isCur ? 32 : 12;
+      fctx.fillStyle = col;
+      fctx.fillText(KEYCHAR[n.i], gx, gy);
+      if (isCur) {
+        const prog = Math.max(0, Math.min(1, 1 - rem/APPROACH));
+        const bw = 210;
+        fctx.shadowBlur = 0;
+        fctx.strokeStyle = 'rgba(255,217,122,.45)'; fctx.lineWidth = 3;
+        fctx.strokeRect(W/2 - bw/2, gy + 20, bw, 10);
+        fctx.fillStyle = 'rgba(255,217,122,.9)';
+        fctx.fillRect(W/2 - bw/2, gy + 20, bw*prog, 10);
+      }
+      fctx.restore();
+      shownN++;
     }
     comboEl.textContent = rg.combo >= 3 ? `连击 × ${rg.combo}` : '';
     scoreEl.textContent = `得分 ${rg.score}`;
@@ -1360,6 +1393,42 @@ document.getElementById('btnStop').addEventListener('click', () => {
   rg.active = false; rhud.style.display = 'none';
   resultsEl.classList.remove('show'); rg.floats.length = 0;
   endFinale();
+});
+
+/* ---------- 自动生成 10 首乐谱 (大调音阶随机游走, 乐句落在主音) ---------- */
+function genAutoScores() {
+  const MAJ = [0, 2, 4, 5, 7, 9, 11];
+  const degLetter = d => String.fromCharCode(97 + (MAJ[((d % 7) + 7) % 7] + 12*Math.floor(d/7)));
+  const names = ['晨光', '微风', '星火', '远山', '溪语', '麦浪', '萤火', '晴空', '浪花', '晚钟'];
+  return names.map(name => {
+    const len = 16 + Math.floor(Math.random()*9);
+    let deg = [0, 2, 4, 7][Math.floor(Math.random()*4)];
+    const steps = [-3, -2, -1, -1, 1, 1, 2, 2, 3, 4, -4];
+    const out = [];
+    for (let k = 0; k < len; k++) {
+      out.push(deg);
+      if (k === len - 1) break;
+      let mv = steps[Math.floor(Math.random()*steps.length)];
+      if (Math.random() < 0.18) mv = mv > 0 ? 3 : -3;      // 偶尔三度跳进
+      let nd = deg + mv;
+      if (nd < 0 || nd > 14) nd = deg - mv;                // 越界反射
+      deg = Math.max(0, Math.min(14, nd));
+    }
+    out[out.length - 1] = [0, 4, 7][Math.floor(Math.random()*3)];   // 落回主音/属音
+    return { name, text: out.map(degLetter).join(' ') };
+  });
+}
+const AUTO_SCORES = genAutoScores();
+document.getElementById('btnRandomScore').addEventListener('click', () => {
+  audioInit();
+  if (wordMode) stopWordMode();
+  endFinale();
+  const s = AUTO_SCORES[Math.floor(Math.random()*AUTO_SCORES.length)];
+  seqInput.value = s.text;
+  tempoEl.value = 300; tempoVal.textContent = '300ms';
+  feedback.textContent = `🎵 乐谱「${s.name}」`;
+  setTimeout(() => feedback.textContent = '', 2600);
+  playSeq();
 });
 seqInput.addEventListener('keydown', e => { if (e.code === 'Enter') playSeq(); });
 
